@@ -90,11 +90,24 @@ def mine():
                 last_difficulty_target_fetched_at = datetime.datetime.now() - datetime.timedelta(seconds=20)
                 continue
 
-            # move the webcash to a new secret
+            # Move the webcash to a new secret so that webcash isn't lost if
+            # mining reports are one day public. At the same time,
+            # consolidate the webcash wallet if possible to reduce wallet size.
+
+            if len(webcash_wallet["webcash"]) >= 3:
+                # pick some webcash for consolidation
+                previous_webcashes = webcash_wallet["webcash"][0:3]
+                previous_webcashes = [SecretWebcash.deserialize(wc) for wc in previous_webcashes]
+                previous_amount = sum([pwc.amount for pwc in previous_webcashes])
+                previous_webcashes = [str(wc) for wc in previous_webcashes]
+            else:
+                previous_webcashes = []
+                previous_amount = 0
+
             print(f"I have created {mining_amount} webcash. Securing secret.")
-            new_webcash = SecretWebcash(amount=mining_amount_remaining, secret_value=secrets.token_hex(32))
+            new_webcash = SecretWebcash(amount=mining_amount_remaining + previous_amount, secret_value=secrets.token_hex(32))
             replace_request = {
-                "webcashes": keep_webcash,
+                "webcashes": keep_webcash + previous_webcashes,
                 "new_webcashes": [str(new_webcash)],
                 "legalese": webcash_wallet["legalese"],
             }
@@ -108,6 +121,12 @@ def mine():
                 print("new_webcashes: " + str(new_webcash))
                 raise Exception("Something went wrong when trying to secure the new webcash.")
             else:
+
+                # remove old webcashes
+                for wc in previous_webcashes:
+                    webcash_wallet["webcash"].remove(str(wc))
+
+                # save new webcash
                 #webcash = data["webcash"]
                 webcash_wallet["webcash"].extend([str(new_webcash)])
                 save_webcash_wallet(webcash_wallet)
