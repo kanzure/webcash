@@ -89,11 +89,27 @@ def mine():
                 last_difficulty_target_fetched_at = datetime.datetime.now() - datetime.timedelta(seconds=20)
                 continue
 
-            webcash = data["webcash"]
-            webcash_wallet["webcash"].extend(keep_webcash)
-            save_webcash_wallet(webcash_wallet)
-            print(f"I have created {mining_amount} webcash... wallet saved!")
-            #time.sleep(0.25)
+            # move the webcash to a new secret
+            print(f"I have created {mining_amount} webcash. Securing secret.")
+            new_webcash = SecretWebcash(amount=mining_amount_remaining, secret_value=secrets.token_hex(32))
+            replace_request = {
+                "webcashes": keep_webcash,
+                "new_webcashes": [str(new_webcash)],
+                "legalese": webcash_wallet["legalese"],
+            }
+            replace_response = requests.post("https://webcash.tech/api/v1/replace", json=replace_request)
+            if replace_response.status_code != 200:
+                print("mining data was: " + str(data))
+                print("mining response was: " + response.content.decode("ascii"))
+                print(f"webcashes: {keep_webcash}")
+                print("new_webcashes: " + str(new_webcash))
+                raise Exception("Something went wrong when trying to secure the new webcash.")
+            else:
+                #webcash = data["webcash"]
+                webcash_wallet["webcash"].extend([str(new_webcash)])
+                save_webcash_wallet(webcash_wallet)
+                print(f"Wallet saved!")
+                #time.sleep(0.25)
 
 if __name__ == "__main__":
     mine()
