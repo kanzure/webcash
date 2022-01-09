@@ -140,7 +140,7 @@ def insert(webcash, memo=""):
         "new_webcashes": [str(new_webcash)],
         "legalese": webcash_wallet["legalese"],
     }
-    print("Sending to the server this replacement request: ", replace_request)
+    #print("Sending to the server this replacement request: ", replace_request)
 
     response = requests.post("https://webcash.tech/api/v1/replace", json=replace_request)
     if response.status_code != 200:

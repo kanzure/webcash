@@ -86,6 +86,7 @@ def mine():
             response = requests.post("https://webcash.tech/api/v1/mining_report", json=mining_report)
             print(f"submission response: {response.content}")
             if response.status_code != 200:
+                # difficulty may have changed against us
                 last_difficulty_target_fetched_at = datetime.datetime.now() - datetime.timedelta(seconds=20)
                 continue
 
@@ -99,6 +100,8 @@ def mine():
             }
             replace_response = requests.post("https://webcash.tech/api/v1/replace", json=replace_request)
             if replace_response.status_code != 200:
+                # might happen if difficulty changed against us during mining
+                # in which case we shouldn't get this far
                 print("mining data was: " + str(data))
                 print("mining response was: " + response.content.decode("ascii"))
                 print(f"webcashes: {keep_webcash}")
