@@ -3,6 +3,7 @@ Prototype of a miner.
 """
 
 import os
+import sys
 import hashlib
 import secrets
 import datetime
@@ -43,6 +44,10 @@ def mine():
         webcash_wallet = create_webcash_wallet()
     else:
         webcash_wallet = load_webcash_wallet()
+
+    if webcash_wallet["legalese"]["terms"] != True:
+        print("Error: run walletclient.py setup first")
+        sys.exit(1)
 
     while True:
         # every 10 seconds, get the latest difficulty
