@@ -81,12 +81,10 @@ def cli():
     pass
 
 @cli.command("info")
-@lock_wallet
 def info():
     return get_info()
 
 @cli.command("status")
-@lock_wallet
 def status():
     return get_info()
 
