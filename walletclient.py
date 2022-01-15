@@ -24,6 +24,7 @@ import sys
 
 import requests
 import click
+from filelock import FileLock
 
 #from miner import mine
 from webcash import (
@@ -34,8 +35,27 @@ from webcash import (
     deserialize_amount,
 )
 
-WALLET_NAME = "default_wallet.webcash"
+# unused?
 FEE_AMOUNT = 0
+
+WALLET_NAME = "default_wallet.webcash"
+
+# Don't want to name this anything close to the wallet filename because the
+# user may have to manually delete the lock at some point.
+LOCKFILE_NAME = "LOCK"
+
+# disable the filelock timeout by setting a negative value
+lock = FileLock(LOCKFILE_NAME, timeout=-1)
+
+def lock_wallet(func):
+    """
+    Function decorator for locking the file.
+    """
+    def wrapper(*args, **kwargs):
+        with lock:
+            result = func(*args, **kwargs)
+        return result
+    return wrapper
 
 # TODO: decryption
 def load_webcash_wallet(filename=WALLET_NAME):
@@ -77,10 +97,12 @@ def cli():
     pass
 
 @cli.command("info")
+@lock_wallet
 def info():
     return get_info()
 
 @cli.command("status")
+@lock_wallet
 def status():
     return get_info()
 
@@ -118,6 +140,7 @@ def setup():
 @cli.command("insert")
 @click.argument("webcash")
 @click.argument("memo", nargs=-1)
+@lock_wallet
 def insert(webcash, memo=""):
     if type(memo) == list or type(memo) == tuple:
         memo = " ".join(memo)
@@ -164,6 +187,7 @@ def insert(webcash, memo=""):
 @cli.command("pay")
 @click.argument('amount')
 @click.argument('memo', nargs=-1)
+@lock_wallet
 def pay(amount, memo=""):
     amount = deserialize_amount(str(amount))
     int(amount) # just to make sure
