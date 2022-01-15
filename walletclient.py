@@ -34,8 +34,12 @@ from webcash import (
     deserialize_amount,
 )
 
-WALLET_NAME = "default_wallet.webcash"
+from utils import lock_wallet
+
+# unused?
 FEE_AMOUNT = 0
+
+WALLET_NAME = "default_wallet.webcash"
 
 # TODO: decryption
 def load_webcash_wallet(filename=WALLET_NAME):
@@ -77,10 +81,12 @@ def cli():
     pass
 
 @cli.command("info")
+@lock_wallet
 def info():
     return get_info()
 
 @cli.command("status")
+@lock_wallet
 def status():
     return get_info()
 
@@ -118,6 +124,7 @@ def setup():
 @cli.command("insert")
 @click.argument("webcash")
 @click.argument("memo", nargs=-1)
+@lock_wallet
 def insert(webcash, memo=""):
     if type(memo) == list or type(memo) == tuple:
         memo = " ".join(memo)
@@ -164,6 +171,7 @@ def insert(webcash, memo=""):
 @cli.command("pay")
 @click.argument('amount')
 @click.argument('memo', nargs=-1)
+@lock_wallet
 def pay(amount, memo=""):
     amount = deserialize_amount(str(amount))
     int(amount) # just to make sure

@@ -23,6 +23,8 @@ from walletclient import (
     create_webcash_wallet,
 )
 
+from utils import lock_wallet
+
 INTERVAL_LENGTH_IN_SECONDS = 10
 
 WALLET_FILENAME = "default_wallet.webcash"
@@ -32,6 +34,7 @@ def get_protocol_settings():
     # difficulty_target_bits, ratio, mining_amount, mining_subsidy_amount
     return response.json()
 
+@lock_wallet
 def mine():
     """
     Use proof-of-work to mine for webcash in a loop.
@@ -99,9 +102,12 @@ def mine():
             # mining reports are one day public. At the same time,
             # consolidate the webcash wallet if possible to reduce wallet size.
 
-            if len(webcash_wallet["webcash"]) >= 3:
+            # Disable mining consolidation for now; you're welcome to test it
+            # out.
+            #if len(webcash_wallet["webcash"]) >= 6:
+            if False:
                 # pick some webcash for consolidation
-                previous_webcashes = webcash_wallet["webcash"][0:3]
+                previous_webcashes = webcash_wallet["webcash"][-5:]
                 previous_webcashes = [SecretWebcash.deserialize(wc) for wc in previous_webcashes]
                 previous_amount = sum([pwc.amount for pwc in previous_webcashes])
                 previous_webcashes = [str(wc) for wc in previous_webcashes]
@@ -122,7 +128,7 @@ def mine():
                 # in which case we shouldn't get this far
                 print("mining data was: " + str(data))
                 print("mining response was: " + response.content.decode("ascii"))
-                print(f"webcashes: {keep_webcash}")
+                print("webcashes: " + str(keep_webcash))
                 print("new_webcashes: " + str(new_webcash))
                 raise Exception("Something went wrong when trying to secure the new webcash.")
             else:
