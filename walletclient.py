@@ -44,6 +44,8 @@ WALLET_NAME = "default_wallet.webcash"
 # TODO: decryption
 def load_webcash_wallet(filename=WALLET_NAME):
     webcash_wallet = json.loads(open(filename, "r").read())
+    if "unconfirmed" not in webcash_wallet:
+        webcash_wallet["unconfirmed"] = []
     return webcash_wallet
 
 # TODO: encryption
@@ -58,6 +60,7 @@ def create_webcash_wallet():
         "legalese": {disclosure_name: None for disclosure_name in LEGALESE.keys()},
         "log": [],
         "webcash": [],
+        "unconfirmed": [],
     }
 
 if not os.path.exists(WALLET_NAME):
@@ -145,6 +148,11 @@ def insert(webcash, memo=""):
         "new_webcashes": [str(new_webcash)],
         "legalese": webcash_wallet["legalese"],
     }
+    # Save the webcash to the wallet in case there is a network error while
+    # attempting to replace it.
+    unconfirmed_webcash = [str(webcash), str(new_webcash)]
+    webcash_wallet["unconfirmed"].extend(unconfirmed_webcash)
+    save_webcash_wallet(webcash_wallet)
     #print("Sending to the server this replacement request: ", replace_request)
 
     response = requests.post("https://webcash.tech/api/v1/replace", json=replace_request)
@@ -153,6 +161,10 @@ def insert(webcash, memo=""):
 
     # save this one in the wallet
     webcash_wallet["webcash"].append(str(new_webcash))
+
+    # remove "unconfirmed" webcash
+    for wc in unconfirmed_webcash:
+        webcash_wallet["unconfirmed"].remove(wc)
 
     # preserve the memo
     webcash_wallet["log"].append({
@@ -216,6 +228,12 @@ def pay(amount, memo=""):
             "new_webcashes": [str(mychange), str(payable)],
             "legalese": webcash_wallet["legalese"],
         }
+        # Save the webcash to the wallet in case there is a network error while
+        # attempting to replace it.
+        unconfirmed_webcash = [str(mychange), str(payable)]
+        webcash_wallet["unconfirmed"].extend(unconfirmed_webcash)
+        save_webcash_wallet(webcash_wallet)
+        # Attempt replacement
         print("Sending to the server this replacement request: ", replace_request)
         response = requests.post("https://webcash.tech/api/v1/replace", json=replace_request)
 
@@ -227,6 +245,10 @@ def pay(amount, memo=""):
             #new_wallet = [x for x in webcash_wallet["webcash"] if x != str(ec)]
             #webcash_wallet["webcash"] = new_wallet
             webcash_wallet["webcash"].remove(str(ec))
+
+        # remove unconfirmed webcashes
+        for wc in unconfirmed_webcash:
+            webcash_wallet["unconfirmed"].remove(wc)
 
         # store change
         webcash_wallet["webcash"].append(str(mychange))
@@ -248,6 +270,11 @@ def pay(amount, memo=""):
             "new_webcashes": [str(payable)],
             "legalese": webcash_wallet["legalese"],
         }
+        # Save the webcash to the wallet in case there is a network error while
+        # attempting to replace it.
+        unconfirmed_webcash = [str(payable)]
+        webcash_wallet["unconfirmed"].extend(unconfirmed_webcash)
+        save_webcash_wallet(webcash_wallet)
 
         #print("replace_request: ", replace_request)
 
@@ -256,6 +283,10 @@ def pay(amount, memo=""):
 
         if response.status_code != 200:
             raise Exception("Something went wrong on the server: ", response.content)
+
+        # remove unconfirmed webcashes
+        for wc in unconfirmed_webcash:
+            webcash_wallet["unconfirmed"].remove(wc)
 
         # remove old webcashes
         for ec in use_this_webcash:
