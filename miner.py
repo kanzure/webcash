@@ -122,6 +122,12 @@ def mine():
                 "new_webcashes": [str(new_webcash)],
                 "legalese": webcash_wallet["legalese"],
             }
+            # Save the webcash to the wallet in case there is a network error
+            # while attempting to replace it.
+            unconfirmed_webcash = keep_webcash + [str(new_webcash)]
+            webcash_wallet["unconfirmed"].extend(unconfirmed_webcash)
+            save_webcash_wallet(webcash_wallet)
+            # Attempt replacement (should not fail!)
             replace_response = requests.post("https://webcash.tech/api/v1/replace", json=replace_request)
             if replace_response.status_code != 200:
                 # might happen if difficulty changed against us during mining
@@ -136,6 +142,10 @@ def mine():
                 # remove old webcashes
                 for wc in previous_webcashes:
                     webcash_wallet["webcash"].remove(str(wc))
+
+                # remove "unconfirmed" webcash
+                for wc in unconfirmed_webcash:
+                    webcash_wallet["unconfirmed"].remove(wc)
 
                 # save new webcash
                 #webcash = data["webcash"]
