@@ -52,7 +52,10 @@ def mine():
         print("Error: run walletclient.py setup first")
         sys.exit(1)
 
+    attempts = 0
+
     while True:
+        attempts += 1
         # every 10 seconds, get the latest difficulty
         fetch_frequency = INTERVAL_LENGTH_IN_SECONDS # seconds
         fetch_timedelta = datetime.datetime.now() - last_difficulty_target_fetched_at
@@ -62,7 +65,9 @@ def mine():
             difficulty_target_bits = protocol_settings["difficulty_target_bits"]
             ratio = protocol_settings["ratio"]
             target = compute_target(difficulty_target_bits)
-            print(f"server says difficulty={difficulty_target_bits} ratio={ratio}")
+            speed = attempts / fetch_frequency
+            attempts = 0
+            print(f"server says difficulty={difficulty_target_bits} ratio={ratio} speed={speed}")
 
         mining_amount = protocol_settings["mining_amount"]
         mining_subsidy_amount = protocol_settings["mining_subsidy_amount"]
