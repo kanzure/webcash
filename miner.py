@@ -58,7 +58,6 @@ def mine():
     subsidy = secrets.token_hex(32)
 
     while True:
-        attempts += 1
         # every 10 seconds, get the latest difficulty
         fetch_frequency = INTERVAL_LENGTH_IN_SECONDS # seconds
         fetch_timedelta = datetime.datetime.now() - last_difficulty_target_fetched_at
@@ -68,11 +67,11 @@ def mine():
             difficulty_target_bits = protocol_settings["difficulty_target_bits"]
             ratio = protocol_settings["ratio"]
             target = compute_target(difficulty_target_bits)
-            speed = attempts / fetch_frequency
+            speed = attempts // fetch_timedelta.total_seconds() / 1000
             attempts = 0
             keep = secrets.token_hex(32)
             subsidy = secrets.token_hex(32)
-            print(f"server says difficulty={difficulty_target_bits} ratio={ratio} speed={speed}")
+            print(f"server says difficulty={difficulty_target_bits} ratio={ratio} speed={speed}khps")
 
         mining_amount = protocol_settings["mining_amount"]
         mining_subsidy_amount = protocol_settings["mining_subsidy_amount"]
@@ -93,6 +92,7 @@ def mine():
         }
         preimage = base64.b64encode(bytes(json.dumps(data), "ascii")).decode("ascii")
         work = int(hashlib.sha256(bytes(str(preimage), "ascii")).hexdigest(), 16)
+        attempts += 1
 
         if work <= target:
             print(f"success! difficulty_target_bits={difficulty_target_bits} target={hex(target)} work={hex(work)}")
