@@ -89,6 +89,7 @@ def mine():
         data = {
             "webcash": keep_webcash + subsidy_webcash,
             "subsidy": subsidy_webcash,
+            "nonce": attempts,
         }
         preimage = base64.b64encode(bytes(json.dumps(data), "ascii")).decode("ascii")
         work = int(hashlib.sha256(bytes(str(preimage), "ascii")).hexdigest(), 16)
@@ -99,7 +100,6 @@ def mine():
             mining_report = {
                 "work": int(work),
                 "preimage": str(preimage),
-                "nonce": attempts,
             }
 
             keep = secrets.token_hex(32)
