@@ -54,6 +54,9 @@ def mine():
 
     attempts = 0
 
+    keep = secrets.token_hex(32)
+    subsidy = secrets.token_hex(32)
+
     while True:
         attempts += 1
         # every 10 seconds, get the latest difficulty
@@ -67,6 +70,8 @@ def mine():
             target = compute_target(difficulty_target_bits)
             speed = attempts / fetch_frequency
             attempts = 0
+            keep = secrets.token_hex(32)
+            subsidy = secrets.token_hex(32)
             print(f"server says difficulty={difficulty_target_bits} ratio={ratio} speed={speed}")
 
         mining_amount = protocol_settings["mining_amount"]
@@ -74,11 +79,11 @@ def mine():
         mining_amount_remaining = mining_amount - mining_subsidy_amount
 
         keep_webcash = [
-            str(SecretWebcash(mining_amount_remaining, secrets.token_hex(32))),
+            str(SecretWebcash(mining_amount_remaining, keep)),
         ]
 
         subsidy_webcash = [
-            str(SecretWebcash(mining_subsidy_amount, secrets.token_hex(32))),
+            str(SecretWebcash(mining_subsidy_amount, subsidy)),
         ]
 
         data = {
@@ -94,7 +99,11 @@ def mine():
             mining_report = {
                 "work": int(work),
                 "preimage": str(preimage),
+                "nonce": attempts,
             }
+
+            keep = secrets.token_hex(32)
+            subsidy = secrets.token_hex(32)
 
             response = requests.post("https://webcash.tech/api/v1/mining_report", json=mining_report)
             print(f"submission response: {response.content}")
