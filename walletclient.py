@@ -122,6 +122,42 @@ def setup():
 
     save_webcash_wallet(webcash_wallet)
 
+@cli.command("check")
+@lock_wallet
+def check():
+    webcash_wallet = load_webcash_wallet()
+
+    outputs = {}
+    for webcash in webcash_wallet["webcash"]:
+        sk = SecretWebcash.deserialize(webcash)
+        outputs[str(sk.to_public())] = webcash
+
+    while outputs:
+        # Batch into no more than 25 at a time
+        batch = {}
+        while outputs and len(batch) < 25:
+            item = outputs.popitem()
+            batch[item[0]] = item[1]
+
+        print(f"Checking batch of {len(batch)} public webcash")
+        health_check_request = [str(x) for x in batch.keys()]
+        response = requests.post("https://webcash.tech/api/v1/health_check", json=health_check_request)
+        if response.status_code != 200:
+            raise Exception("Something went wrong on the server: ", response.content)
+        response = json.loads(response.content)
+        if response.get("status", "") != "success":
+            raise Exception("Something went wrong on the server: ", json.dumps(response))
+
+        for webcash, result in response["results"].items():
+            if result["spent"] in (None, True):
+                print(f"Invalid webcash found: {str(webcash)}; removing from wallet")
+                if webcash not in batch:
+                    raise Exception(f"Server-returned webcash {str(webcash)} wasn't in our request.  This should never happen!")
+                webcash_wallet["unconfirmed"].append(batch[webcash])
+                webcash_wallet["webcash"].remove(batch[webcash])
+
+    save_webcash_wallet(webcash_wallet)
+
 @cli.command("insert")
 @click.argument("webcash")
 @click.argument("memo", nargs=-1)
