@@ -207,7 +207,8 @@ def insert(webcash, memo=""):
         "type": "receive",
         "memo": str(memo),
         "amount": str(new_webcash.amount),
-        "webcash": str(new_webcash),
+        "input_webcash": str(webcash),
+        "output_webcash": str(new_webcash),
     })
 
     print(f"Done! Saved e{new_webcash.amount} in the wallet, with the memo: {memo}")
@@ -339,7 +340,8 @@ def pay(amount, memo=""):
         "type": "payment",
         "memo": " ".join(memo),
         "amount": str(amount),
-        "webcash": str(use_this_webcash[0]),
+        "input_webcashes": [str(ec) for ec in use_this_webcash],
+        "output_webcash": str(payable),
         "timestamp": str(datetime.datetime.now()),
     })
 
