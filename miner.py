@@ -54,7 +54,7 @@ def mine():
 
     attempts = 0
 
-    keep = generate_new_secret(webcash_wallet, chain_code="RECEIVE")
+    keep = generate_new_secret(webcash_wallet, chain_code="MINING")
     subsidy = generate_new_secret(webcash_wallet, chain_code="PAY")
 
     while True:
@@ -100,7 +100,7 @@ def mine():
                 "preimage": str(preimage),
             }
 
-            keep = generate_new_secret(webcash_wallet, chain_code="RECEIVE")
+            keep = generate_new_secret(webcash_wallet, chain_code="MINING")
             subsidy = generate_new_secret(webcash_wallet, chain_code="PAY")
 
             response = requests.post("https://webcash.tech/api/v1/mining_report", json=mining_report)
@@ -128,7 +128,7 @@ def mine():
                 previous_amount = 0
 
             print(f"I have created {mining_amount} webcash. Securing secret.")
-            new_webcash = SecretWebcash(amount=mining_amount_remaining + previous_amount, secret_value=generate_new_secret(webcash_wallet, chain_code="RECEIVE"))
+            new_webcash = SecretWebcash(amount=mining_amount_remaining + previous_amount, secret_value=generate_new_secret(webcash_wallet, chain_code="MINING"))
             replace_request = {
                 "webcashes": keep_webcash + previous_webcashes,
                 "new_webcashes": [str(new_webcash)],

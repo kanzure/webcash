@@ -48,6 +48,7 @@ CHAIN_CODES = {
     "RECEIVE": 0,
     "PAY": 1,
     "CHANGE": 2,
+    "MINING": 3,
 }
 
 def convert_secret_hex_to_bytes(secret):
