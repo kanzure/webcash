@@ -15,11 +15,13 @@ python3 walletclient.py pay 5.15 <memo(optional)>
 
 That's it!
 """
+
 import json
 import decimal
 import secrets
 import hashlib
 import datetime
+import struct
 import os
 import sys
 
@@ -42,15 +44,40 @@ FEE_AMOUNT = 0
 
 WALLET_NAME = "default_wallet.webcash"
 
-def generate_new_secret(webcash_wallet=None, length=32):
+CHAIN_CODES = {
+    "RECEIVE": 0,
+    "PAY": 1,
+    "CHANGE": 2,
+}
+
+def convert_secret_hex_to_bytes(secret):
+    """
+    Convert a string secret to bytes.
+    """
+    return int(secret, 16).to_bytes(32, byteorder="big")
+
+def generate_new_secret(webcash_wallet=None, length=32, chain_code="RECEIVE"):
     """
     Generate a new secret using the deterministic wallet when possible.
     """
     if webcash_wallet:
+        walletdepth = webcash_wallet["walletdepths"][chain_code]
         master_secret = webcash_wallet["master_secret"]
-        walletdepth = webcash_wallet["walletdepth"]
-        new_secret = hashlib.sha256(bytes(master_secret + str(walletdepth), "utf-8")).hexdigest()
-        webcash_wallet["walletdepth"] = (walletdepth + 1)
+        master_secret_bytes = convert_secret_hex_to_bytes(master_secret)
+
+        tag = hashlib.sha256(b"webcashwalletv1").digest()
+        new_secret = hashlib.sha256(tag + tag)
+        new_secret.update(master_secret_bytes)
+        new_secret.update(struct.pack(">Q", CHAIN_CODES[chain_code.upper()])) # big-endian
+        new_secret.update(struct.pack(">Q", walletdepth))
+        new_secret = new_secret.hexdigest()
+
+        # Record the change in walletdepth, but don't record the new secret
+        # because (1) it can be re-constructed even if it is lost, and (2) the
+        # assumption is that other code elsewhere will do something with the
+        # new secret.
+        webcash_wallet["walletdepths"][chain_code] = (walletdepth + 1)
+
         save_webcash_wallet(webcash_wallet)
     else:
         new_secret = secrets.token_hex(length)
@@ -60,7 +87,13 @@ def generate_new_master_secret():
     """
     Generate a new random master secret for the deterministic wallet.
     """
-    return generate_new_secret()
+    return generate_new_secret(webcash_wallet=None, length=32, chain_code=None)
+
+def generate_initial_walletdepths():
+    """
+    Setup the walletdepths object all zeroed out for each of the chaincodes.
+    """
+    return {key.upper(): 0 for key in CHAIN_CODES.keys()}
 
 # TODO: decryption
 def load_webcash_wallet(filename=WALLET_NAME):
@@ -69,11 +102,14 @@ def load_webcash_wallet(filename=WALLET_NAME):
     if "unconfirmed" not in webcash_wallet:
         webcash_wallet["unconfirmed"] = []
 
+    if "walletdepths" not in webcash_wallet:
+        webcash_wallet["walletdepths"] = generate_initial_walletdepths()
+        save_webcash_wallet(webcash_wallet)
+
     if "master_secret" not in webcash_wallet:
         print("Generating a new master secret for the wallet (none previously detected)")
 
         webcash_wallet["master_secret"] = generate_new_master_secret()
-        webcash_wallet["walletdepth"] = 0
         save_webcash_wallet(webcash_wallet)
 
         print("Be sure to backup your wallet for safekeeping of its master secret.")
@@ -103,9 +139,11 @@ def create_webcash_wallet():
         # wallet file.
         "master_secret": master_secret,
 
-        # walletdepth is a counter to track how many secrets have been
-        # generated so that the wallet can generate unique secrets.
-        "walletdepth": 0,
+        # walletdepths has multiple counters to track how many secrets have
+        # been generated so that the wallet can generate unique secrets. Each
+        # chaincode is used for a different purpose, like RECEIVE, CHANGE, and
+        # PAY.
+        "walletdepths": generate_initial_walletdepths(),
     }
 
 if not os.path.exists(WALLET_NAME):
@@ -124,8 +162,8 @@ def get_info():
 
     print(f"Total amount stored in this wallet (if secure): e{amount}")
 
-    walletdepth = webcash_wallet["walletdepth"]
-    print(f"walletdepth: {walletdepth}")
+    walletdepths = webcash_wallet["walletdepths"]
+    print(f"walletdepth: {walletdepths}")
 
 @click.group()
 def cli():
@@ -225,81 +263,82 @@ def recover():
     """
 
     webcash_wallet = load_webcash_wallet()
-    reported_walletdepth = webcash_wallet["walletdepth"]
 
     # gaplimit is the maximum window span that will be used, on the assumption
     # that any valid webcash will be found within the last item plus gaplimit
     # number more of the secrets.
     gaplimit = 20
 
-    # keep track of where we're at in this process
-    current_walletdepth = 0
-
     # Check all the webcash in the wallet and remove any webcash that has been
     # already spent.
     check_wallet()
 
-    # Iterate through gaplimit-many secrets at a time and check each one.
-    _idx = 0
-    last_used_walletdepth = 0
-    has_had_webcash = True
-    while has_had_webcash:
-        print(f"Checking gaplimit {gaplimit} secrets, round {_idx}...")
-        # assume this is the last iteration
-        has_had_webcash = False
+    for chain_code in webcash_wallet["walletdepths"].keys():
+        # keep track of where we're at in this process
+        current_walletdepth = 0
 
-        # Check the next gaplimit number of secrets. Continue to the next round
-        # if any of the secrets have ever been used, regardless of whether they
-        # still have value.
+        reported_walletdepth = webcash_wallet["walletdepths"][chain_code]
 
-        check_webcashes = {}
-        for x in range(current_walletdepth, current_walletdepth + gaplimit):
-            secret = hashlib.sha256(bytes(webcash_wallet["master_secret"] + str(x), "utf-8")).hexdigest()
-            webcash = SecretWebcash.deserialize("e1:secret:" + secret)
-            check_webcashes[str(webcash.to_public())] = webcash
-            webcash.walletdepth = x
+        # Iterate through gaplimit-many secrets at a time and check each one.
+        _idx = 0
+        last_used_walletdepth = 0
+        has_had_webcash = True
+        while has_had_webcash:
+            print(f"Checking gaplimit {gaplimit} secrets for chaincode {chain_code}, round {_idx}...")
+            # assume this is the last iteration
+            has_had_webcash = False
 
-        health_check_request = list(check_webcashes.keys())
-        response = requests.post("https://webcash.tech/api/v1/health_check", json=health_check_request)
-        if response.status_code != 200:
-            raise Exception("Something went wrong on the server: ", response.content)
-        response = json.loads(response.content)
-        if response.get("status", "") != "success":
-            raise Exception("Something went wrong on the server: ", json.dumps(response))
+            # Check the next gaplimit number of secrets. Continue to the next round
+            # if any of the secrets have ever been used, regardless of whether they
+            # still have value.
 
-        #idx = 0
-        for (public_webcash, result) in response["results"].items():
-            if result["spent"] != None:
+            check_webcashes = {}
+            for x in range(current_walletdepth, current_walletdepth + gaplimit):
+                secret = hashlib.sha256(bytes(webcash_wallet["master_secret"] + str(x), "utf-8")).hexdigest()
+                webcash = SecretWebcash.deserialize("e1:secret:" + secret)
+                check_webcashes[str(webcash.to_public())] = webcash
+                webcash.walletdepth = x
+
+            health_check_request = list(check_webcashes.keys())
+            response = requests.post("https://webcash.tech/api/v1/health_check", json=health_check_request)
+            if response.status_code != 200:
+                raise Exception("Something went wrong on the server: ", response.content)
+            response = json.loads(response.content)
+            if response.get("status", "") != "success":
+                raise Exception("Something went wrong on the server: ", json.dumps(response))
+
+            #idx = 0
+            for (public_webcash, result) in response["results"].items():
+                if result["spent"] != None:
+                    has_had_webcash = True
+                    #last_used_walletdepth = current_walletdepth + idx
+                    last_used_walletdepth = check_webcashes[public_webcash].walletdepth
+
+                if result["spent"] == False:
+                    wc = check_webcashes[public_webcash]
+                    wc.amount = decimal.Decimal(result["amount"])
+                    if str(wc) not in webcash_wallet["webcash"]:
+                        print(f"Recovered webcash: {wc.amount}")
+                        webcash_wallet["webcash"].append(str(check_webcashes[public_webcash]))
+                    else:
+                        print(f"Found known webcash worth: {wc.amount}")
+
+                #idx += 1
+
+            if has_had_webcash:
+                current_walletdepth = current_walletdepth + gaplimit
+
+            # continue anyway if the wallet says its walletdepth is greater
+            if max([wc.walletdepth for wc in check_webcashes.values()]) < reported_walletdepth:
                 has_had_webcash = True
-                #last_used_walletdepth = current_walletdepth + idx
-                last_used_walletdepth = check_webcashes[public_webcash].walletdepth
 
-            if result["spent"] == False:
-                wc = check_webcashes[public_webcash]
-                wc.amount = decimal.Decimal(result["amount"])
-                if str(wc) not in webcash_wallet["webcash"]:
-                    print(f"Recovered webcash: {wc.amount}")
-                    webcash_wallet["webcash"].append(str(check_webcashes[public_webcash]))
-                else:
-                    print(f"Found known webcash worth: {wc.amount}")
+            _idx += 1
 
-            #idx += 1
+        if reported_walletdepth > last_used_walletdepth + 1:
+            print(f"Something may have gone wrong: reported walletdepth was {reported_walletdepth} but only found up to {last_used_walletdepth} depth")
 
-        if has_had_webcash:
-            current_walletdepth = current_walletdepth + gaplimit
-
-        # continue anyway if the wallet says its walletdepth is greater
-        if max([wc.walletdepth for wc in check_webcashes.values()]) < reported_walletdepth:
-            print("last_used_walletdepth == " + str(last_used_walletdepth))
-            has_had_webcash = True
-
-        _idx += 1
-
-    if reported_walletdepth > last_used_walletdepth + 1:
-        print(f"Something may have gone wrong: reported walletdepth was {reported_walletdepth} but only found up to {last_used_walletdepth} depth")
-
-    if reported_walletdepth < last_used_walletdepth:
-        webcash_wallet["walletdepth"] = last_used_walletdepth + 1
+        if reported_walletdepth < last_used_walletdepth:
+            webcash_wallet["walletdepths"][chain_code] = last_used_walletdepth + 1
 
     # TODO: only save the wallet when it has been modified?
     save_webcash_wallet(webcash_wallet)
@@ -323,7 +362,7 @@ def insert(webcash, memo=""):
     webcash = SecretWebcash.deserialize(webcash)
 
     # store it in a new webcash
-    new_webcash = SecretWebcash(amount=webcash.amount, secret_value=generate_new_secret(webcash_wallet))
+    new_webcash = SecretWebcash(amount=webcash.amount, secret_value=generate_new_secret(webcash_wallet, chain_code="RECEIVE"))
 
     replace_request = {
         "webcashes": [str(webcash)],
@@ -405,8 +444,8 @@ def pay(amount, memo=""):
         change = found_amount - amount - FEE_AMOUNT
         print(f"change: {change}")
 
-        mychange = SecretWebcash(amount=change, secret_value=generate_new_secret(webcash_wallet))
-        payable = SecretWebcash(amount=amount, secret_value=generate_new_secret(webcash_wallet))
+        mychange = SecretWebcash(amount=change, secret_value=generate_new_secret(webcash_wallet, chain_code="CHANGE"))
+        payable = SecretWebcash(amount=amount, secret_value=generate_new_secret(webcash_wallet, chain_code="PAY"))
 
         replace_request = {
             "webcashes": [str(ec) for ec in use_this_webcash],
@@ -450,7 +489,7 @@ def pay(amount, memo=""):
 
         use_this_webcash = [payable]
     elif found_amount == amount + FEE_AMOUNT:
-        payable = SecretWebcash(amount=amount, secret_value=generate_new_secret(webcash_wallet))
+        payable = SecretWebcash(amount=amount, secret_value=generate_new_secret(webcash_wallet, chain_code="PAY"))
 
         replace_request = {
             "webcashes": [str(ec) for ec in use_this_webcash],
