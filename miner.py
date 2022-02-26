@@ -5,7 +5,6 @@ Prototype of a miner.
 import os
 import sys
 import hashlib
-import secrets
 import datetime
 import json
 import base64
@@ -21,6 +20,7 @@ from walletclient import (
     load_webcash_wallet,
     save_webcash_wallet,
     create_webcash_wallet,
+    generate_new_secret,
 )
 
 from utils import lock_wallet
@@ -54,8 +54,8 @@ def mine():
 
     attempts = 0
 
-    keep = secrets.token_hex(32)
-    subsidy = secrets.token_hex(32)
+    keep = generate_new_secret(webcash_wallet, chain_code="RECEIVE")
+    subsidy = generate_new_secret(webcash_wallet, chain_code="PAY")
 
     while True:
         # every 10 seconds, get the latest difficulty
@@ -69,8 +69,6 @@ def mine():
             target = compute_target(difficulty_target_bits)
             speed = attempts // fetch_timedelta.total_seconds() / 1000
             attempts = 0
-            keep = secrets.token_hex(32)
-            subsidy = secrets.token_hex(32)
             print(f"server says difficulty={difficulty_target_bits} ratio={ratio} speed={speed}khps")
 
         mining_amount = protocol_settings["mining_amount"]
@@ -102,8 +100,8 @@ def mine():
                 "preimage": str(preimage),
             }
 
-            keep = secrets.token_hex(32)
-            subsidy = secrets.token_hex(32)
+            keep = generate_new_secret(webcash_wallet, chain_code="RECEIVE")
+            subsidy = generate_new_secret(webcash_wallet, chain_code="PAY")
 
             response = requests.post("https://webcash.tech/api/v1/mining_report", json=mining_report)
             print(f"submission response: {response.content}")
@@ -130,7 +128,7 @@ def mine():
                 previous_amount = 0
 
             print(f"I have created {mining_amount} webcash. Securing secret.")
-            new_webcash = SecretWebcash(amount=mining_amount_remaining + previous_amount, secret_value=secrets.token_hex(32))
+            new_webcash = SecretWebcash(amount=mining_amount_remaining + previous_amount, secret_value=generate_new_secret(webcash_wallet, chain_code="RECEIVE"))
             replace_request = {
                 "webcashes": keep_webcash + previous_webcashes,
                 "new_webcashes": [str(new_webcash)],
