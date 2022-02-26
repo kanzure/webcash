@@ -229,7 +229,7 @@ def check_wallet():
     outputs = {}
     for webcash in webcash_wallet["webcash"]:
         sk = SecretWebcash.deserialize(webcash)
-        outputs[str(sk.to_public())] = webcash
+        outputs[str(sk.to_public().hashed_value)] = webcash
 
     while outputs:
         # Batch into no more than 25 at a time
@@ -239,7 +239,7 @@ def check_wallet():
             batch[item[0]] = item[1]
 
         print(f"Checking batch of {len(batch)} public webcash")
-        health_check_request = [str(x) for x in batch.keys()]
+        health_check_request = [str(x) for x in batch.values()]
         response = requests.post("https://webcash.tech/api/v1/health_check", json=health_check_request)
         if response.status_code != 200:
             raise Exception("Something went wrong on the server: ", response.content)
@@ -250,10 +250,16 @@ def check_wallet():
         for webcash, result in response["results"].items():
             if result["spent"] in (None, True):
                 print(f"Invalid webcash found: {str(webcash)}; removing from wallet")
-                if webcash not in batch:
+
+                # Use this as the key so that amount differences don't cause an
+                # item-not-found error on otherwise same webcash.
+                webcash_hashed_value = PublicWebcash.deserialize(webcash).hashed_value
+
+                if webcash_hashed_value not in batch:
                     raise Exception(f"Server-returned webcash {str(webcash)} wasn't in our request.  This should never happen!")
-                webcash_wallet["unconfirmed"].append(batch[webcash])
-                webcash_wallet["webcash"].remove(batch[webcash])
+
+                webcash_wallet["unconfirmed"].append(batch[webcash_hashed_value])
+                webcash_wallet["webcash"].remove(batch[webcash_hashed_value])
 
     save_webcash_wallet(webcash_wallet)
 
