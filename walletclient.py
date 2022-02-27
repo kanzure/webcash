@@ -155,12 +155,6 @@ def create_webcash_wallet():
         "walletdepths": generate_initial_walletdepths(),
     }
 
-if not os.path.exists(WALLET_NAME):
-    print(f"Didn't find an existing webcash wallet, making a new one called {WALLET_NAME}")
-    webcash_wallet = create_webcash_wallet()
-    ask_user_for_legal_agreements(webcash_wallet)
-    save_webcash_wallet(webcash_wallet)
-
 def get_info():
     webcash_wallet = load_webcash_wallet()
 
@@ -558,4 +552,12 @@ def pay(amount, memo=""):
     save_webcash_wallet(webcash_wallet)
 
 if __name__ == "__main__":
+
+    # Create a new webcash wallet if one does not already exist.
+    if not os.path.exists(WALLET_NAME):
+        print(f"Didn't find an existing webcash wallet, making a new one called {WALLET_NAME}")
+        webcash_wallet = create_webcash_wallet()
+        ask_user_for_legal_agreements(webcash_wallet)
+        save_webcash_wallet(webcash_wallet)
+
     cli()
