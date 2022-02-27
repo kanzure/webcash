@@ -23,6 +23,10 @@ python3 walletclient.py pay 18.00 "memo: for lunch with bob"
 python3 walletclient.py insert
 ```
 
+## Mining
+
+See <a href="https://github.com/maaku/webminer">webminer</a> for a substantially faster mining client.
+
 ## License
 
 This repository and its source code is distributed under the BSD license.
