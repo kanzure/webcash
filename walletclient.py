@@ -224,6 +224,10 @@ def check_wallet():
     outputs = {}
     for webcash in webcash_wallet["webcash"]:
         sk = SecretWebcash.deserialize(webcash)
+        if str(sk.to_public().hashed_value) in outputs.keys():
+            print("Duplicate webcash detected in wallet, moving it to unconfirmed")
+            webcash_wallet["unconfirmed"].append(webcash)
+            webcash_wallet["webcash"].remove(webcash)
         outputs[str(sk.to_public().hashed_value)] = webcash
 
     while outputs:
