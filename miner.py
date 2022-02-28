@@ -87,7 +87,7 @@ def mine():
             "webcash": keep_webcash + subsidy_webcash,
             "subsidy": subsidy_webcash,
             "nonce": attempts,
-            "timestamp": datetime.datetime.now().timestamp(),
+            "timestamp": str(datetime.datetime.now().timestamp()),
         }
         preimage = base64.b64encode(bytes(json.dumps(data), "ascii")).decode("ascii")
         work = int(hashlib.sha256(bytes(str(preimage), "ascii")).hexdigest(), 16)
@@ -133,7 +133,8 @@ def mine():
             # already recorded in MINING. Everything in MINING that is unspent
             # needs to be replaced, and replacing already-replaced webcash is
             # redundant, so it should go into CHANGE instead.
-            new_webcash = SecretWebcash(amount=mining_amount_remaining + previous_amount, secret_value=generate_new_secret(webcash_wallet, chain_code="CHANGE"))
+            new_secret_value = generate_new_secret(webcash_wallet, chain_code="CHANGE")
+            new_webcash = SecretWebcash(amount=mining_amount_remaining + previous_amount, secret_value=new_secret_value)
             replace_request = {
                 "webcashes": keep_webcash + previous_webcashes,
                 "new_webcashes": [str(new_webcash)],
