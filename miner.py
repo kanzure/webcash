@@ -170,5 +170,8 @@ def mine():
                 print(f"Wallet saved!")
                 #time.sleep(0.25)
 
+            keep = generate_new_secret(webcash_wallet, chain_code="MINING", peek=0)
+            subsidy = generate_new_secret(webcash_wallet, chain_code="PAY", peek=0)
+
 if __name__ == "__main__":
     mine()
