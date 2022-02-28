@@ -128,7 +128,11 @@ def mine():
                 previous_amount = 0
 
             print(f"I have created {mining_amount} webcash. Securing secret.")
-            new_webcash = SecretWebcash(amount=mining_amount_remaining + previous_amount, secret_value=generate_new_secret(webcash_wallet, chain_code="MINING"))
+            # Use the CHANGE chaincode because the original mined webcash was
+            # already recorded in MINING. Everything in MINING that is unspent
+            # needs to be replaced, and replacing already-replaced webcash is
+            # redundant, so it should go into CHANGE instead.
+            new_webcash = SecretWebcash(amount=mining_amount_remaining + previous_amount, secret_value=generate_new_secret(webcash_wallet, chain_code="CHANGE"))
             replace_request = {
                 "webcashes": keep_webcash + previous_webcashes,
                 "new_webcashes": [str(new_webcash)],
