@@ -255,6 +255,15 @@ def check_wallet():
 
                 webcash_wallet["unconfirmed"].append(batch[webcash_hashed_value])
                 webcash_wallet["webcash"].remove(batch[webcash_hashed_value])
+            elif result["spent"] == False:
+                # check the amount...
+                webcash_hashed_value = PublicWebcash.deserialize(webcash).hashed_value
+                wallet_cash = SecretWebcash.deserialize(batch[webcash_hashed_value])
+                result_amount = decimal.Decimal(result["amount"])
+                if result_amount != wallet_cash.amount:
+                    print(f"Wallet mistakenly thought it had a webcash with amount {wallet_cash.amount} but instead the webcash was for amount {result_amount}; fixing..")
+                    webcash_wallet["webcash"].remove(batch[webcash_hashed_value])
+                    webcash_wallet["webcash"].append("e" + str(result_amount) + ":secret:" + wallet_cash.secret_value)
 
     save_webcash_wallet(webcash_wallet)
 
@@ -355,6 +364,7 @@ def recover(gaplimit):
             webcash_wallet["walletdepths"][chain_code] = last_used_walletdepth + 1
 
     # TODO: only save the wallet when it has been modified?
+    print("Saving wallet...")
     save_webcash_wallet(webcash_wallet)
 
 @cli.command("insert")
