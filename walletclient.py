@@ -264,19 +264,19 @@ def check():
     return check_wallet()
 
 @cli.command("recover")
+@click.option("--gaplimit", default=20)
 @lock_wallet
-def recover():
+def recover(gaplimit):
     """
     Recover webcash from a webcash wallet using its master secret as a
     deterministic seed. Also check all webcash in the wallet.
     """
-
-    webcash_wallet = load_webcash_wallet()
-
     # gaplimit is the maximum window span that will be used, on the assumption
     # that any valid webcash will be found within the last item plus gaplimit
     # number more of the secrets.
-    gaplimit = 20
+    gaplimit = int(gaplimit)
+
+    webcash_wallet = load_webcash_wallet()
 
     # Check all the webcash in the wallet and remove any webcash that has been
     # already spent.
