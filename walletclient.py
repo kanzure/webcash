@@ -57,7 +57,7 @@ def convert_secret_hex_to_bytes(secret):
     """
     return int(secret, 16).to_bytes(32, byteorder="big")
 
-def generate_new_secret(webcash_wallet=None, length=32, chain_code="RECEIVE", walletdepth=None, peek=None):
+def generate_new_secret(webcash_wallet=None, length=32, chain_code="RECEIVE", walletdepth=None):
     """
     Derive a new secret using the deterministic wallet's master secret.
     """
@@ -67,9 +67,6 @@ def generate_new_secret(webcash_wallet=None, length=32, chain_code="RECEIVE", wa
             walletdepth = webcash_wallet["walletdepths"][chain_code]
         else:
             walletdepth = walletdepth
-
-        if peek != None:
-            walletdepth = peek
 
         master_secret = webcash_wallet["master_secret"]
         master_secret_bytes = convert_secret_hex_to_bytes(master_secret)
@@ -85,7 +82,7 @@ def generate_new_secret(webcash_wallet=None, length=32, chain_code="RECEIVE", wa
         # because (1) it can be re-constructed even if it is lost, and (2) the
         # assumption is that other code elsewhere will do something with the
         # new secret.
-        if walletdepth_param == None and peek == None:
+        if walletdepth_param == None:
             # Only update the walletdepth if the walletdepth was not provided.
             # This allows for the recovery function to work correctly.
             webcash_wallet["walletdepths"][chain_code] = (walletdepth + 1)
