@@ -54,8 +54,8 @@ def mine():
 
     attempts = 0
 
-    keep = generate_new_secret(webcash_wallet, chain_code="MINING")
-    subsidy = generate_new_secret(webcash_wallet, chain_code="PAY")
+    keep = generate_new_secret(webcash_wallet, chain_code="MINING", peek=0)
+    subsidy = generate_new_secret(webcash_wallet, chain_code="PAY", peek=0)
 
     while True:
         # every 10 seconds, get the latest difficulty
