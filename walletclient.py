@@ -59,7 +59,7 @@ def convert_secret_hex_to_bytes(secret):
 
 def generate_new_secret(webcash_wallet=None, length=32, chain_code="RECEIVE", walletdepth=None):
     """
-    Generate a new secret using the deterministic wallet when possible.
+    Derive a new secret using the deterministic wallet's master secret.
     """
     if webcash_wallet:
         walletdepth_param = walletdepth
@@ -89,14 +89,14 @@ def generate_new_secret(webcash_wallet=None, length=32, chain_code="RECEIVE", wa
 
         save_webcash_wallet(webcash_wallet)
     else:
-        new_secret = secrets.token_hex(length)
+        raise NotImplementedError
     return new_secret
 
 def generate_new_master_secret():
     """
     Generate a new random master secret for the deterministic wallet.
     """
-    return generate_new_secret(webcash_wallet=None, length=32, chain_code=None)
+    return secrets.token_hex(32)
 
 def generate_initial_walletdepths():
     """
