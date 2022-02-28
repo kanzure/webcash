@@ -276,11 +276,12 @@ def recover(gaplimit):
     # number more of the secrets.
     gaplimit = int(gaplimit)
 
-    webcash_wallet = load_webcash_wallet()
-
     # Check all the webcash in the wallet and remove any webcash that has been
     # already spent.
     check_wallet()
+
+    # check_wallet will save the wallet, so load it again
+    webcash_wallet = load_webcash_wallet()
 
     for chain_code in webcash_wallet["walletdepths"].keys():
         # keep track of where we're at in this process
