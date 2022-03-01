@@ -54,8 +54,8 @@ def mine():
 
     attempts = 0
 
-    keep = generate_new_secret(webcash_wallet, chain_code="MINING", walletdepth=0)
-    subsidy = generate_new_secret(webcash_wallet, chain_code="PAY", walletdepth=0)
+    keep = generate_new_secret(webcash_wallet, chain_code="MINING", walletdepth=webcash_wallet["walletdepths"]["MINING"] + 0)
+    subsidy = generate_new_secret(webcash_wallet, chain_code="PAY", walletdepth=webcash_wallet["walletdepths"]["PAY"] + 0)
 
     while True:
         # every 10 seconds, get the latest difficulty
@@ -172,8 +172,8 @@ def mine():
                 print(f"Wallet saved!")
                 #time.sleep(0.25)
 
-            keep = generate_new_secret(webcash_wallet, chain_code="MINING", walletdepth=0)
-            subsidy = generate_new_secret(webcash_wallet, chain_code="PAY", walletdepth=0)
+            keep = generate_new_secret(webcash_wallet, chain_code="MINING", walletdepth=webcash_wallet["walletdepths"]["MINING"] + 0)
+            subsidy = generate_new_secret(webcash_wallet, chain_code="PAY", walletdepth=webcash_wallet["walletdepths"]["PAY"] + 0)
 
 if __name__ == "__main__":
     mine()
