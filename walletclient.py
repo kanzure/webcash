@@ -424,9 +424,76 @@ def insert(webcash, memo=""):
         "output_webcash": str(new_webcash),
     })
 
+    save_webcash_wallet(webcash_wallet)
     print(f"Done! Saved e{new_webcash.amount} in the wallet, with the memo: {memo}")
 
+@cli.command("insertmany")
+@click.argument("webcash", nargs=-1)
+@lock_wallet
+def insertmany(webcash):
+    """
+    Insert multiple webcash into the wallet at the same time. Each webcash gets
+    merged together in a single request. Use whitespace to separate each
+    webcash on the command line.
+    """
+
+    # TODO: consolidate common functionality duplicated with "insert"
+
+    webcash_wallet = load_webcash_wallet()
+
+    # TODO: move this into a shared decorator
+    acks = check_legal_agreements(webcash_wallet)
+    if not acks:
+        print("User must acknowledge and agree to agreements first.")
+        return
+
+    # use set to filter out duplicates by total string value
+    webcashes = list(set(webcash))
+
+    # deserialize
+    webcashes = [SecretWebcash.deserialize(wc) for wc in webcash]
+
+    # further filter out duplicates by secret_value
+    wc_secrets = [wc.secret_value for wc in webcashes]
+    deduped = list(set([(wc_secrets.count(wc.secret_value), str(wc)) for wc in webcashes]))
+    webcashes = [SecretWebcash.deserialize(x[1]) for x in deduped]
+
+    total_amount = sum([wc.amount for wc in webcashes])
+
+    merged_webcash_secret = generate_new_secret(webcash_wallet, chain_code="RECEIVE")
+    merged_webcash = SecretWebcash(amount=decimal.Decimal(total_amount), secret_value=merged_webcash_secret)
+
+    replace_request = {
+        "webcashes": [str(wc) for wc in webcashes],
+        "new_webcashes": [str(merged_webcash)],
+        "legalese": webcash_wallet["legalese"],
+    }
+
+    unconfirmed_webcashes = [str(wc) for wc in webcashes] + [str(merged_webcash)]
+    webcash_wallet["unconfirmed"].extend(unconfirmed_webcashes)
     save_webcash_wallet(webcash_wallet)
+
+    response = requests.post("https://webcash.tech/api/v1/replace", json=replace_request)
+    if response.status_code != 200:
+        raise Exception("Something went wrong on the server: ", response.content)
+
+    webcash_wallet["webcash"].append(str(merged_webcash))
+
+    # remove "unconfirmed" webcash
+    for wc in unconfirmed_webcashes:
+        webcash_wallet["unconfirmed"].remove(wc)
+
+    webcash_wallet["log"].append({
+        "type": "receive",
+        "memo": "",
+        "amount": str(merged_webcash.amount),
+        "input_webcash": [str(wc) for wc in webcashes],
+        "output_webcash": [str(merged_webcash)],
+    })
+
+    save_webcash_wallet(webcash_wallet)
+    print(f"Done! Saved e{merged_webcash.amount} in the wallet.")
+
 
 @cli.command("pay")
 @click.argument('amount')
