@@ -5,7 +5,6 @@ Prototype of a miner.
 import os
 import sys
 import hashlib
-import secrets
 import datetime
 import json
 import base64
@@ -21,6 +20,7 @@ from walletclient import (
     load_webcash_wallet,
     save_webcash_wallet,
     create_webcash_wallet,
+    generate_new_secret,
 )
 
 from utils import lock_wallet
@@ -54,8 +54,8 @@ def mine():
 
     attempts = 0
 
-    keep = secrets.token_hex(32)
-    subsidy = secrets.token_hex(32)
+    keep = generate_new_secret(webcash_wallet, chain_code="MINING", walletdepth=0)
+    subsidy = generate_new_secret(webcash_wallet, chain_code="PAY", walletdepth=0)
 
     while True:
         # every 10 seconds, get the latest difficulty
@@ -69,8 +69,6 @@ def mine():
             target = compute_target(difficulty_target_bits)
             speed = attempts // fetch_timedelta.total_seconds() / 1000
             attempts = 0
-            keep = secrets.token_hex(32)
-            subsidy = secrets.token_hex(32)
             print(f"server says difficulty={difficulty_target_bits} ratio={ratio} speed={speed}khps")
 
         mining_amount = protocol_settings["mining_amount"]
@@ -89,6 +87,7 @@ def mine():
             "webcash": keep_webcash + subsidy_webcash,
             "subsidy": subsidy_webcash,
             "nonce": attempts,
+            "timestamp": str(datetime.datetime.now().timestamp()),
         }
         preimage = base64.b64encode(bytes(json.dumps(data), "ascii")).decode("ascii")
         work = int(hashlib.sha256(bytes(str(preimage), "ascii")).hexdigest(), 16)
@@ -102,8 +101,8 @@ def mine():
                 "preimage": str(preimage),
             }
 
-            keep = secrets.token_hex(32)
-            subsidy = secrets.token_hex(32)
+            keep = generate_new_secret(webcash_wallet, chain_code="MINING")
+            subsidy = generate_new_secret(webcash_wallet, chain_code="PAY")
 
             response = requests.post("https://webcash.tech/api/v1/mining_report", json=mining_report)
             print(f"submission response: {response.content}")
@@ -130,7 +129,12 @@ def mine():
                 previous_amount = 0
 
             print(f"I have created {mining_amount} webcash. Securing secret.")
-            new_webcash = SecretWebcash(amount=mining_amount_remaining + previous_amount, secret_value=secrets.token_hex(32))
+            # Use the CHANGE chaincode because the original mined webcash was
+            # already recorded in MINING. Everything in MINING that is unspent
+            # needs to be replaced, and replacing already-replaced webcash is
+            # redundant, so it should go into CHANGE instead.
+            new_secret_value = generate_new_secret(webcash_wallet, chain_code="CHANGE")
+            new_webcash = SecretWebcash(amount=mining_amount_remaining + previous_amount, secret_value=new_secret_value)
             replace_request = {
                 "webcashes": keep_webcash + previous_webcashes,
                 "new_webcashes": [str(new_webcash)],
@@ -167,6 +171,9 @@ def mine():
                 save_webcash_wallet(webcash_wallet)
                 print(f"Wallet saved!")
                 #time.sleep(0.25)
+
+            keep = generate_new_secret(webcash_wallet, chain_code="MINING", walletdepth=0)
+            subsidy = generate_new_secret(webcash_wallet, chain_code="PAY", walletdepth=0)
 
 if __name__ == "__main__":
     mine()
