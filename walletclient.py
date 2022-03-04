@@ -494,6 +494,43 @@ def insertmany(webcash):
     save_webcash_wallet(webcash_wallet)
     print(f"Done! Saved e{merged_webcash.amount} in the wallet.")
 
+@cli.command("insertunsafely")
+@click.argument("webcash", nargs=-1)
+@lock_wallet
+def insertunsafely(webcash):
+    """
+    Directly insert the given webcash into the wallet.
+
+    WARNING: This is insecure and does not check the status of any of the
+    webcash. You probably don't want to use this.
+
+    WARNING: This will not use the deterministic wallet. Recovery will not
+    catch any webcash inserted in this manner.
+    """
+
+    webcash_wallet = load_webcash_wallet()
+
+    acks = check_legal_agreements(webcash_wallet)
+    if not acks:
+        print("User must acknowledge and agree to the terms first.")
+        return
+
+    webcashes = list(set(webcash))
+
+    # use set to filter out duplicates by total string value
+    webcashes = list(set(webcash))
+
+    # deserialize
+    webcashes = [SecretWebcash.deserialize(wc) for wc in webcash]
+
+    # further filter out duplicates by secret_value
+    wc_secrets = [wc.secret_value for wc in webcashes]
+    deduped = list(set([(wc_secrets.count(wc.secret_value), str(wc)) for wc in webcashes]))
+    webcashes = [x[1] for x in deduped]
+
+    webcash_wallet["webcash"].extend(webcashes)
+
+    print(f"Inserted {len(webcashes)} webcash" + ("es" if len(webcashes) > 1 else "") + " into the wallet.")
 
 @cli.command("pay")
 @click.argument('amount')
