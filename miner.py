@@ -10,6 +10,7 @@ import json
 import base64
 import requests
 import time
+from decimal import Decimal
 
 from webcash import (
     SecretWebcash,
@@ -71,8 +72,8 @@ def mine():
             attempts = 0
             print(f"server says difficulty={difficulty_target_bits} ratio={ratio} speed={speed}khps")
 
-        mining_amount = protocol_settings["mining_amount"]
-        mining_subsidy_amount = protocol_settings["mining_subsidy_amount"]
+        mining_amount = Decimal(protocol_settings["mining_amount"])
+        mining_subsidy_amount = Decimal(protocol_settings["mining_subsidy_amount"])
         mining_amount_remaining = mining_amount - mining_subsidy_amount
 
         keep_webcash = [
