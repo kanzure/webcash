@@ -57,7 +57,7 @@ def convert_secret_hex_to_bytes(secret):
     """
     return int(secret, 16).to_bytes(32, byteorder="big")
 
-def generate_new_secret(webcash_wallet=None, length=32, chain_code="RECEIVE", walletdepth=None):
+def generate_new_secret(webcash_wallet=None, chain_code="RECEIVE", walletdepth=None):
     """
     Derive a new secret using the deterministic wallet's master secret.
     """
@@ -493,7 +493,6 @@ def insertmany(webcash):
 
     save_webcash_wallet(webcash_wallet)
     print(f"Done! Saved e{merged_webcash.amount} in the wallet.")
-
 
 @cli.command("pay")
 @click.argument('amount')
