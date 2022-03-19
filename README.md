@@ -15,7 +15,14 @@ pip3 install webcash
 Otherwise, install locally for testing or development purposes:
 
 ```
-pip3 install -e .
+pip3 install .
+```
+
+If you want to run the software without installing the module, you still need to install the dependencies:
+
+```
+pip3 install requirements.txt
+python3 -m webcash.walletclient info
 ```
 
 ## Usage
