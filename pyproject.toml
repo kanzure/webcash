@@ -1,0 +1,5 @@
+[build-system]
+requires = ["setuptools>=42", "click==8.0.3", "requests==2.27.1", "filelock==3.4.1"]
+build-backend = "setuptools.build_meta"
+
+

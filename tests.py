@@ -4,7 +4,7 @@ import random
 import hashlib
 from decimal import Decimal
 
-from webcash import (
+from webcash.webcashbase import (
     PublicWebcash,
     SecretWebcash,
     secret_to_public,

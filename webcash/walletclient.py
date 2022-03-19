@@ -29,7 +29,7 @@ import requests
 import click
 
 #from miner import mine
-from webcash import (
+from .webcashbase import (
     SecretWebcash,
     PublicWebcash,
     LEGALESE,
@@ -37,7 +37,7 @@ from webcash import (
     deserialize_amount,
 )
 
-from utils import lock_wallet
+from .utils import lock_wallet
 
 # unused?
 FEE_AMOUNT = 0
@@ -632,8 +632,7 @@ def pay(amount, memo=""):
 
     save_webcash_wallet(webcash_wallet)
 
-if __name__ == "__main__":
-
+def main():
     # Create a new webcash wallet if one does not already exist.
     if not os.path.exists(WALLET_NAME):
         print(f"Didn't find an existing webcash wallet, making a new one called {WALLET_NAME}")
@@ -641,4 +640,7 @@ if __name__ == "__main__":
         ask_user_for_legal_agreements(webcash_wallet)
         save_webcash_wallet(webcash_wallet)
 
-    cli()
+    return cli()
+
+if __name__ == "__main__":
+    main()

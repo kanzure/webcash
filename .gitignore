@@ -1,3 +1,11 @@
-__pycache__
 default_wallet.webcash
 LOCK
+
+# python
+__pycache__
+dist/
+*.egg-info/
+venv/
+
+# vim swap files
+.*.sw*

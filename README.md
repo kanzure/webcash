@@ -6,26 +6,37 @@ Navigate to <a href="https://webcash.org/">https://webcash.org/</a> for more inf
 
 ## Installation
 
-This is a python-based webcash client.
+This is a python-based webcash wallet client. To install the latest version on the python package index, use this:
 
 ```
-pip3 install -r requirements.txt
+pip3 install webcash
+```
+
+Otherwise, install locally for testing or development purposes:
+
+```
+pip3 install -e .
 ```
 
 ## Usage
 
 ```
-python3 walletclient.py setup
-python3 walletclient.py status
-python3 miner.py
-python3 walletclient.py pay 5
-python3 walletclient.py pay 18.00 "memo: for lunch with bob"
-python3 walletclient.py insert
+webcash setup
+webcash status
+webcash pay 5
+webcash pay 18 "memo: for lunch with bob"
+webcash insert <webcash goes here>
 ```
 
 ## Mining
 
 See <a href="https://github.com/maaku/webminer">webminer</a> for a substantially faster mining client.
+
+This repository contains the original reference implementation of the miner which is much slower:
+
+```
+python3 miner.py
+```
 
 ## License
 

@@ -12,12 +12,12 @@ import requests
 import time
 from decimal import Decimal
 
-from webcash import (
+from webcash.webcashbase import (
     SecretWebcash,
     compute_target,
 )
 
-from walletclient import (
+from webcash.walletclient import (
     load_webcash_wallet,
     save_webcash_wallet,
     create_webcash_wallet,
