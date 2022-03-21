@@ -11,6 +11,10 @@ from webcash.webcashbase import (
     LEGALESE,
 )
 
+from webcash.exceptions import (
+    AmountException
+)
+
 _ACKED_DISCLOSURES = {disclosure_name: True for disclosure_name in LEGALESE.keys()}
 
 class SecretWebcashTestCase(unittest.TestCase):
@@ -50,7 +54,9 @@ class SecretWebcashTestCase(unittest.TestCase):
         assert all([SecretWebcash.deserialize(str(webcash)) == webcash for webcash in webcashes])
         assert all([SecretWebcash.deserialize(str(webcash)).amount == webcash.amount for webcash in webcashes])
 
-        # TODO: test amounts with more than 8 decimals (they should fail)
+    def test_invalid_amounts(self):
+        amount = Decimal("0.123456789") # too many decimals
+        self.assertRaises(AmountException, SecretWebcash, amount=amount, secret_value=secrets.token_hex(8) )
 
 if __name__ == "__main__":
     unittest.main()
