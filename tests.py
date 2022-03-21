@@ -11,7 +11,7 @@ from webcash.webcashbase import (
     LEGALESE,
 )
 
-from exceptions import (
+from webcash.exceptions import (
     AmountException
 )
 
