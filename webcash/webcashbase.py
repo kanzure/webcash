@@ -8,7 +8,7 @@ from .exceptions import (
 )
 
 LEGALESE = {
-    "terms": "I acknowledge and agree to the Terms of Service located at https://webcash.tech/terms",
+    "terms": "I acknowledge and agree to the Terms of Service located at https://webcash.org/terms",
 }
 
 def compute_target(difficulty_target_bits):
