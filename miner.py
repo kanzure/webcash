@@ -88,7 +88,8 @@ def mine():
             "webcash": keep_webcash + subsidy_webcash,
             "subsidy": subsidy_webcash,
             "nonce": attempts,
-            "timestamp": str(datetime.datetime.now().timestamp()),
+            "timestamp": datetime.datetime.utcnow().timestamp(),
+            "difficulty": int(difficulty_target_bits),
             "legalese": webcash_wallet["legalese"],
         }
         preimage = base64.b64encode(bytes(json.dumps(data), "ascii")).decode("ascii")
