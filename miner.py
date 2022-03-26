@@ -100,6 +100,7 @@ def mine():
             mining_report = {
                 "work": int(work),
                 "preimage": str(preimage),
+                "legalese": webcash_wallet["legalese"],
             }
 
             keep = generate_new_secret(webcash_wallet, chain_code="MINING")
