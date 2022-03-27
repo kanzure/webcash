@@ -24,7 +24,7 @@ from webcash.walletclient import (
     generate_new_secret,
 )
 
-from utils import lock_wallet
+from webcash.utils import lock_wallet
 
 INTERVAL_LENGTH_IN_SECONDS = 10
 
