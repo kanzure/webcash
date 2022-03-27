@@ -422,6 +422,7 @@ def insert(webcash, memo=""):
         "amount": str(new_webcash.amount),
         "input_webcash": str(webcash),
         "output_webcash": str(new_webcash),
+        "timestamp": str(datetime.datetime.now()),
     })
 
     save_webcash_wallet(webcash_wallet)
@@ -489,6 +490,7 @@ def insertmany(webcash):
         "amount": str(merged_webcash.amount),
         "input_webcash": [str(wc) for wc in webcashes],
         "output_webcash": [str(merged_webcash)],
+        "timestamp": str(datetime.datetime.now()),
     })
 
     save_webcash_wallet(webcash_wallet)
