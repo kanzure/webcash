@@ -24,6 +24,7 @@ import datetime
 import struct
 import os
 import sys
+from typing import List
 
 import requests
 import click
@@ -33,7 +34,6 @@ from .webcashbase import (
     SecretWebcash,
     PublicWebcash,
     LEGALESE,
-    check_legal_agreements,
     deserialize_amount,
 )
 
@@ -64,11 +64,11 @@ def generate_new_secret(webcash_wallet=None, chain_code="RECEIVE", walletdepth=N
     if webcash_wallet:
         walletdepth_param = walletdepth
         if walletdepth == None:
-            walletdepth = webcash_wallet["walletdepths"][chain_code]
+            walletdepth = webcash_wallet.walletdepths[chain_code]
         else:
             walletdepth = walletdepth
 
-        master_secret = webcash_wallet["master_secret"]
+        master_secret = webcash_wallet.master_secret
         master_secret_bytes = convert_secret_hex_to_bytes(master_secret)
 
         tag = hashlib.sha256(b"webcashwalletv1").digest()
@@ -85,7 +85,7 @@ def generate_new_secret(webcash_wallet=None, chain_code="RECEIVE", walletdepth=N
         if walletdepth_param == None:
             # Only update the walletdepth if the walletdepth was not provided.
             # This allows for the recovery function to work correctly.
-            webcash_wallet["walletdepths"][chain_code] = (walletdepth + 1)
+            webcash_wallet.walletdepths[chain_code] = (walletdepth + 1)
 
         save_webcash_wallet(webcash_wallet)
     else:
@@ -109,26 +109,28 @@ def load_webcash_wallet(filename=WALLET_NAME):
     webcash_wallet = json.loads(open(filename, "r").read())
 
     if "unconfirmed" not in webcash_wallet:
-        webcash_wallet["unconfirmed"] = []
+        webcash_wallet.unconfirmed = []
 
     if "walletdepths" not in webcash_wallet:
-        webcash_wallet["walletdepths"] = generate_initial_walletdepths()
+        webcash_wallet.walletdepths = generate_initial_walletdepths()
         save_webcash_wallet(webcash_wallet)
 
     if "master_secret" not in webcash_wallet:
         print("Generating a new master secret for the wallet (none previously detected)")
 
-        webcash_wallet["master_secret"] = generate_new_master_secret()
+        webcash_wallet.master_secret = generate_new_master_secret()
         save_webcash_wallet(webcash_wallet)
 
         print("Be sure to backup your wallet for safekeeping of its master secret.")
 
+    wallet_data = webcash_wallet
+    webcash_wallet = WebcashWallet.load_from_json(json.dumps(wallet_data))
     return webcash_wallet
 
 # TODO: encryption
 def save_webcash_wallet(webcash_wallet, filename=WALLET_NAME):
     with open(filename, "w") as fd:
-        fd.write(json.dumps(webcash_wallet))
+        fd.write(webcash_wallet.to_json())
     return True
 
 def create_webcash_wallet():
@@ -155,17 +157,483 @@ def create_webcash_wallet():
         "walletdepths": generate_initial_walletdepths(),
     }
 
+class WebcashWallet():
+    version: str
+    legalese: dict
+    log: List
+    webcash: List
+    unconfirmed: List
+    master_secret: str
+    walletdepths: dict
+
+    def __init__(self): 
+        pass
+
+    def setup(self):
+        """
+        Create a new webcash wallet.
+        """
+        data = create_webcash_wallet()
+        self.version = data["version"]
+        self.legalese = data["legalese"]
+        self.log = data["log"]
+        self.webcash = data["webcash"]
+        self.unconfirmed = data["unconfirmed"]
+        self.master_secret = data["master_secret"]
+        self.walletdepths = data["walletdepths"]        
+
+    def to_json(self):
+        wallet_data = {
+            "version": self.version,
+            "legalese": self.legalese,
+            "log": self.log,
+            "webcash": self.webcash,
+            "unconfirmed": self.unconfirmed,
+            "master_secret": self.master_secret,
+            "walletdepths": self.walletdepths,
+        }    
+        return json.dumps(wallet_data)
+
+    @classmethod
+    def load_from_json(cls, json_data):
+        wallet_data = json.loads(json_data)
+        wallet = cls()
+        wallet.version = wallet_data["version"]
+        wallet.legalese = wallet_data["legalese"]
+        wallet.log = wallet_data["log"]
+        wallet.webcash = wallet_data["webcash"]
+        wallet.unconfirmed = wallet_data["unconfirmed"]
+        wallet.master_secret = wallet_data["master_secret"]
+        wallet.walletdepths = wallet_data["walletdepths"]
+        return wallet
+
+    def save(self):
+        raise NotImplementedError("Use a subclass to save the wallet.")
+
+    def check_legal_agreements(self):
+        """
+        Disclosures must be acknowledged before the user can use this wallet.
+        """
+        acknowledgements = self.legalese.items()
+        expected = LEGALESE.keys()
+        has_expected = all([expectation in self.legalese.keys() for expectation in expected])
+        agreement = all(ack[1] == True for ack in acknowledgements)
+        return has_expected and agreement
+
+    def require_legal_agreements(self):
+        """
+        Disclosures must be acknowledged before the user can use this wallet.
+        """
+        if not self.check_legal_agreements():
+            raise Exception("You must acknowledge the legal agreements before you can use this wallet.")
+
+    def set_legal_agreements(self):
+        self.legalese["terms"] = True
+
+    @property 
+    def balance(self):
+        """
+        Get the balance of the wallet.
+        """
+        amount = 0
+        for webcash in self.webcash:
+            webcash = SecretWebcash.deserialize(webcash)
+            amount += webcash.amount
+        return amount
+
+    def check(self):
+        """
+        Check the webcash in the wallet to see if any has already been spent
+        according to the webcash server.
+        """
+        self.require_legal_agreements()
+
+        webcash_wallet = self
+        outputs = {}
+        for webcash in webcash_wallet.webcash:
+            sk = SecretWebcash.deserialize(webcash)
+            if str(sk.to_public().hashed_value) in outputs.keys():
+                print("Duplicate webcash detected in wallet, moving it to unconfirmed")
+                webcash_wallet.unconfirmed.append(webcash)
+                webcash_wallet.webcash.remove(webcash)
+            outputs[str(sk.to_public().hashed_value)] = webcash
+
+        while outputs:
+            # Batch into no more than 25 at a time
+            batch = {}
+            while outputs and len(batch) < 25:
+                item = outputs.popitem()
+                batch[item[0]] = item[1]
+
+            print(f"Checking batch of {len(batch)} public webcash")
+            health_check_request = [str(x) for x in batch.values()]
+            response = requests.post("https://webcash.org/api/v1/health_check", json=health_check_request)
+            if response.status_code != 200:
+                raise Exception("Something went wrong on the server: ", response.content)
+            response = json.loads(response.content)
+            if response.get("status", "") != "success":
+                raise Exception("Something went wrong on the server: ", json.dumps(response))
+
+            for webcash, result in response["results"].items():
+                if result["spent"] in (None, True):
+                    print(f"Invalid webcash found: {str(webcash)}; removing from wallet")
+
+                    # Use this as the key so that amount differences don't cause an
+                    # item-not-found error on otherwise same webcash.
+                    webcash_hashed_value = PublicWebcash.deserialize(webcash).hashed_value
+
+                    if webcash_hashed_value not in batch:
+                        raise Exception(f"Server-returned webcash {str(webcash)} wasn't in our request.  This should never happen!")
+
+                    webcash_wallet.unconfirmed.append(batch[webcash_hashed_value])
+                    webcash_wallet.webcash.remove(batch[webcash_hashed_value])
+                elif result["spent"] == False:
+                    # check the amount...
+                    webcash_hashed_value = PublicWebcash.deserialize(webcash).hashed_value
+                    wallet_cash = SecretWebcash.deserialize(batch[webcash_hashed_value])
+                    result_amount = decimal.Decimal(result["amount"])
+                    if result_amount != wallet_cash.amount:
+                        print(f"Wallet mistakenly thought it had a webcash with amount {wallet_cash.amount} but instead the webcash was for amount {result_amount}; fixing..")
+                        webcash_wallet.webcash.remove(batch[webcash_hashed_value])
+                        webcash_wallet.webcash.append("e" + str(result_amount) + ":secret:" + wallet_cash.secret_value)
+
+    def recover(self, gaplimit=20, skip_check_wallet=False):
+        """
+        Recover webcash from a webcash wallet using its master secret as a
+        deterministic seed. Also check all webcash in the wallet.
+        """
+        self.require_legal_agreements()
+
+        webcash_wallet = self
+
+        # gaplimit is the maximum window span that will be used, on the
+        # assumption that any valid webcash will be found within the last item
+        # plus gaplimit number more of the secrets.
+        gaplimit = int(gaplimit)
+    
+        # Check all the webcash in the wallet and remove any webcash that has
+        # been already spent.
+        if not skip_check_wallet:
+            check_wallet()
+
+        for chain_code in webcash_wallet.walletdepths.keys():
+            # keep track of where we're at in this process
+            current_walletdepth = 0
+
+            reported_walletdepth = webcash_wallet.walletdepths[chain_code]
+
+            # Iterate through gaplimit-many secrets at a time and check each one.
+            _idx = 0
+            last_used_walletdepth = 0
+            has_had_webcash = True
+            while has_had_webcash:
+                print(f"Checking gaplimit {gaplimit} secrets for chaincode {chain_code}, round {_idx}...")
+
+                # assume this is the last iteration
+                has_had_webcash = False
+
+                # Check the next gaplimit number of secrets. Continue to the next round
+                # if any of the secrets have ever been used, regardless of whether they
+                # still have value.
+
+                check_webcashes = {}
+                for x in range(current_walletdepth, current_walletdepth + gaplimit):
+                    secret = generate_new_secret(webcash_wallet, chain_code=chain_code, walletdepth=x)
+                    webcash = SecretWebcash.deserialize("e1:secret:" + secret)
+                    check_webcashes[webcash.to_public().hashed_value] = webcash
+                    webcash.walletdepth = x
+
+                health_check_request = [str(swc.to_public()) for (pwc, swc) in check_webcashes.items()]
+                response = requests.post("https://webcash.org/api/v1/health_check", json=health_check_request)
+                if response.status_code != 200:
+                    raise Exception("Something went wrong on the server: ", response.content)
+                response = json.loads(response.content)
+                if response.get("status", "") != "success":
+                    raise Exception("Something went wrong on the server: ", json.dumps(response))
+
+                #idx = 0
+                for (public_webcash, result) in response["results"].items():
+                    public_webcash = PublicWebcash.deserialize(public_webcash).hashed_value
+
+                    if result["spent"] != None:
+                        has_had_webcash = True
+                        #last_used_walletdepth = current_walletdepth + idx
+                        last_used_walletdepth = check_webcashes[public_webcash].walletdepth
+
+                    if result["spent"] == False:
+                        wc = check_webcashes[public_webcash]
+                        wc.amount = decimal.Decimal(result["amount"])
+                        if chain_code.upper() != "PAY" and str(wc) not in webcash_wallet.webcash:
+                            print(f"Recovered webcash: {wc.amount}")
+                            webcash_wallet.webcash.append(str(check_webcashes[public_webcash]))
+                        else:
+                            print(f"Found known webcash of amount: {wc.amount} (might be a payment)")
+
+                    #idx += 1
+
+                # continue anyway if the wallet says its walletdepth is greater
+                #if max([wc.walletdepth for wc in check_webcashes.values()]) < reported_walletdepth:
+                if current_walletdepth < reported_walletdepth:
+                    has_had_webcash = True
+
+                if has_had_webcash:
+                    current_walletdepth = current_walletdepth + gaplimit
+
+                _idx += 1
+
+            if reported_walletdepth > last_used_walletdepth + 1:
+                print(f"Something may have gone wrong: reported walletdepth was {reported_walletdepth} but only found up to {last_used_walletdepth} depth")
+
+            if reported_walletdepth < last_used_walletdepth:
+                webcash_wallet.walletdepths[chain_code] = last_used_walletdepth + 1
+
+    def insert(self, webcash, memo=""):
+        """
+        Insert webcash into the wallet.
+        """
+        self.require_legal_agreements()
+        
+        if type(memo) == list or type(memo) == tuple:
+            memo = " ".join(memo)
+
+        webcash_wallet = self
+
+        # make sure it's valid webcash
+        webcash = SecretWebcash.deserialize(webcash)
+
+        # store it in a new webcash
+        new_webcash = SecretWebcash(amount=webcash.amount, secret_value=generate_new_secret(webcash_wallet, chain_code="RECEIVE"))
+
+        replace_request = {
+            "webcashes": [str(webcash)],
+            "new_webcashes": [str(new_webcash)],
+            "legalese": webcash_wallet.legalese,
+        }
+        # Save the webcash to the wallet in case there is a network error while
+        # attempting to replace it.
+        unconfirmed_webcash = [str(webcash), str(new_webcash)]
+        webcash_wallet.unconfirmed.extend(unconfirmed_webcash)
+
+        response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
+        if response.status_code != 200:
+            raise Exception("Something went wrong on the server: ", response.content)
+
+        # save this one in the wallet
+        webcash_wallet.webcash.append(str(new_webcash))
+
+        # remove "unconfirmed" webcash
+        for wc in unconfirmed_webcash:
+            webcash_wallet.unconfirmed.remove(wc)
+
+        # preserve the memo
+        webcash_wallet.log.append({
+            "type": "receive",
+            "memo": str(memo),
+            "amount": str(new_webcash.amount),
+            "input_webcash": str(webcash),
+            "output_webcash": str(new_webcash),
+        })
+
+        print(f"Added e{new_webcash.amount} into the wallet, with the memo: {memo}")
+        return new_webcash
+
+    def insertmany(self, webcashes):
+        """
+        Insert multiple webcashes into the wallet at the same time.
+        """
+        self.require_legal_agreements()
+
+        # TODO: consolidate common functionality duplicated with "insert"
+
+        webcash_wallet = self
+
+        # use set to filter out duplicates by total string value
+        webcashes = list(set(webcashes))
+
+        # deserialize
+        webcashes = [SecretWebcash.deserialize(wc) for wc in webcash]
+
+        # further filter out duplicates by secret_value
+        wc_secrets = [wc.secret_value for wc in webcashes]
+        deduped = list(set([(wc_secrets.count(wc.secret_value), str(wc)) for wc in webcashes]))
+        webcashes = [SecretWebcash.deserialize(x[1]) for x in deduped]
+
+        total_amount = sum([wc.amount for wc in webcashes])
+
+        merged_webcash_secret = generate_new_secret(webcash_wallet, chain_code="RECEIVE")
+        merged_webcash = SecretWebcash(amount=decimal.Decimal(total_amount), secret_value=merged_webcash_secret)
+
+        replace_request = {
+            "webcashes": [str(wc) for wc in webcashes],
+            "new_webcashes": [str(merged_webcash)],
+            "legalese": webcash_wallet.legalese,
+        }
+
+        unconfirmed_webcashes = [str(wc) for wc in webcashes] + [str(merged_webcash)]
+        webcash_wallet.unconfirmed.extend(unconfirmed_webcashes)
+
+        response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
+        if response.status_code != 200:
+            raise Exception("Something went wrong on the server: ", response.content)
+
+        webcash_wallet.webcash.append(str(merged_webcash))
+
+        # remove "unconfirmed" webcash
+        for wc in unconfirmed_webcashes:
+            webcash_wallet.unconfirmed.remove(wc)
+
+        webcash_wallet.log.append({
+            "type": "receive",
+            "memo": "",
+            "amount": str(merged_webcash.amount),
+            "input_webcash": [str(wc) for wc in webcashes],
+            "output_webcash": [str(merged_webcash)],
+        })
+
+        print(f"Added e{merged_webcash.amount} in the wallet.")
+        return merged_webcash
+
+    def pay(self, amount, memo=""):
+        """
+        Get a new payment code for the given amount.
+        """
+        self.require_legal_agreements()
+
+        if type(memo) == list or type(memo) == tuple:
+            memo = " ".join(memo)
+
+        webcash_wallet = self
+
+        amount = deserialize_amount(str(amount))
+        int(amount) # just to make sure
+        amount += FEE_AMOUNT # fee...
+    
+        # scan for an amount
+        use_this_webcash = []
+        for webcash in webcash_wallet.webcash:
+            webcash = SecretWebcash.deserialize(webcash)
+
+            if webcash.amount >= amount:
+                use_this_webcash.append(webcash)
+                break
+        else:
+            running_amount = decimal.Decimal(0)
+            running_webcash = []
+            for webcash in webcash_wallet.webcash:
+                webcash = SecretWebcash.deserialize(webcash)
+                running_webcash.append(webcash)
+                running_amount += webcash.amount
+
+                if running_amount >= amount:
+                    use_this_webcash = running_webcash
+                    break
+            else:
+                print("Couldn't find enough webcash in the wallet.")
+                return None
+
+        found_amount = sum([ec.amount for ec in use_this_webcash])
+        print(f"found_amount: {found_amount}")
+        if found_amount > (amount + FEE_AMOUNT): # +1 for the fee
+            change = found_amount - amount - FEE_AMOUNT
+            print(f"change: {change}")
+
+            mychange = SecretWebcash(amount=change, secret_value=generate_new_secret(webcash_wallet, chain_code="CHANGE"))
+            payable = SecretWebcash(amount=amount, secret_value=generate_new_secret(webcash_wallet, chain_code="PAY"))
+
+            replace_request = {
+                "webcashes": [str(ec) for ec in use_this_webcash],
+                "new_webcashes": [str(mychange), str(payable)],
+                "legalese": webcash_wallet.legalese,
+            }
+
+            # Save the webcash to the wallet in case there is a network error while
+            # attempting to replace it.
+            unconfirmed_webcash = [str(mychange), str(payable)]
+            webcash_wallet.unconfirmed.extend(unconfirmed_webcash)
+
+            # Attempt replacement
+            #print("Sending to the server this replacement request: ", replace_request)
+            response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
+
+            if response.status_code != 200:
+                raise Exception("Something went wrong on the server: ", response.content)
+
+            # remove old webcashes
+            for ec in use_this_webcash:
+                #new_wallet = [x for x in webcash_wallet.webcash if x != str(ec)]
+                #webcash_wallet.webcash = new_wallet
+                webcash_wallet.webcash.remove(str(ec))
+
+            # remove unconfirmed webcashes
+            for wc in unconfirmed_webcash:
+                webcash_wallet.unconfirmed.remove(wc)
+
+            # store change
+            webcash_wallet.webcash.append(str(mychange))
+
+            log_entry = {
+                "type": "change",
+                "amount": str(mychange.amount),
+                "webcash": str(mychange),
+                "timestamp": str(datetime.datetime.now()),
+            }
+            webcash_wallet.log.append(log_entry)
+
+            use_this_webcash = [payable]
+        elif found_amount == amount + FEE_AMOUNT:
+            payable = SecretWebcash(amount=amount, secret_value=generate_new_secret(webcash_wallet, chain_code="PAY"))
+
+            replace_request = {
+                "webcashes": [str(ec) for ec in use_this_webcash],
+                "new_webcashes": [str(payable)],
+                "legalese": webcash_wallet.legalese,
+            }
+            # Save the webcash to the wallet in case there is a network error while
+            # attempting to replace it.
+            unconfirmed_webcash = [str(payable)]
+            webcash_wallet.unconfirmed.extend(unconfirmed_webcash)
+
+            #print("replace_request: ", replace_request)
+
+            #print("Sending to the server this replacement request: ", replace_request)
+            response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
+
+            if response.status_code != 200:
+                raise Exception("Something went wrong on the server: ", response.content)
+
+            # remove unconfirmed webcashes
+            for wc in unconfirmed_webcash:
+                webcash_wallet.unconfirmed.remove(wc)
+
+            # remove old webcashes
+            for ec in use_this_webcash:
+                #new_wallet = [x for x in webcash_wallet.webcash if x != str(ec)]
+                #webcash_wallet.webcash = new_wallet
+                webcash_wallet.webcash.remove(str(ec))
+
+            use_this_webcash = [payable]
+        else:
+            raise NotImplementedError
+
+        # store a record of this transaction
+        webcash_wallet.log.append({
+            "type": "payment",
+            "memo": " ".join(memo),
+            "amount": str(amount),
+            "input_webcashes": [str(ec) for ec in use_this_webcash],
+            "output_webcash": str(payable),
+            "timestamp": str(datetime.datetime.now()),
+        })
+
+        return use_this_webcash[0]
+
 def get_info():
     webcash_wallet = load_webcash_wallet()
-
-    amount = 0
-    for webcash in webcash_wallet["webcash"]:
-        webcash = SecretWebcash.deserialize(webcash)
-        amount += webcash.amount
+    amount = webcash_wallet.balance
 
     print(f"Total amount stored in this wallet (if secure): e{amount}")
 
-    walletdepths = webcash_wallet["walletdepths"]
+    walletdepths = webcash_wallet.walletdepths
     print(f"walletdepth: {walletdepths}")
 
 @click.group()
@@ -193,7 +661,7 @@ def ask_user_for_legal_agreements(webcash_wallet):
     Allow the user to agree to the agreements, disclosures, and
     acknowledgements.
     """
-    acks = check_legal_agreements(webcash_wallet)
+    acks = webcash_wallet.check_legal_agreements()
     if acks:
         print("User has already agreed and acknowledged the disclosures.")
     elif not acks:
@@ -206,7 +674,7 @@ def ask_user_for_legal_agreements(webcash_wallet):
                 print(f"Unfortunately, you must acknowledge and agree to all agreements to use webcash.")
                 sys.exit(0)
             elif answer == True:
-                webcash_wallet["legalese"][disclosure_name] = True
+                webcash_wallet.legalese[disclosure_name] = True
                 continue
 
         print("\n\n\nAll done! You've acknowledged all the disclosures. You may now use webcash.")
@@ -220,56 +688,12 @@ def setup():
 
 def check_wallet():
     webcash_wallet = load_webcash_wallet()
-
-    outputs = {}
-    for webcash in webcash_wallet["webcash"]:
-        sk = SecretWebcash.deserialize(webcash)
-        if str(sk.to_public().hashed_value) in outputs.keys():
-            print("Duplicate webcash detected in wallet, moving it to unconfirmed")
-            webcash_wallet["unconfirmed"].append(webcash)
-            webcash_wallet["webcash"].remove(webcash)
-        outputs[str(sk.to_public().hashed_value)] = webcash
-
-    while outputs:
-        # Batch into no more than 25 at a time
-        batch = {}
-        while outputs and len(batch) < 25:
-            item = outputs.popitem()
-            batch[item[0]] = item[1]
-
-        print(f"Checking batch of {len(batch)} public webcash")
-        health_check_request = [str(x) for x in batch.values()]
-        response = requests.post("https://webcash.org/api/v1/health_check", json=health_check_request)
-        if response.status_code != 200:
-            raise Exception("Something went wrong on the server: ", response.content)
-        response = json.loads(response.content)
-        if response.get("status", "") != "success":
-            raise Exception("Something went wrong on the server: ", json.dumps(response))
-
-        for webcash, result in response["results"].items():
-            if result["spent"] in (None, True):
-                print(f"Invalid webcash found: {str(webcash)}; removing from wallet")
-
-                # Use this as the key so that amount differences don't cause an
-                # item-not-found error on otherwise same webcash.
-                webcash_hashed_value = PublicWebcash.deserialize(webcash).hashed_value
-
-                if webcash_hashed_value not in batch:
-                    raise Exception(f"Server-returned webcash {str(webcash)} wasn't in our request.  This should never happen!")
-
-                webcash_wallet["unconfirmed"].append(batch[webcash_hashed_value])
-                webcash_wallet["webcash"].remove(batch[webcash_hashed_value])
-            elif result["spent"] == False:
-                # check the amount...
-                webcash_hashed_value = PublicWebcash.deserialize(webcash).hashed_value
-                wallet_cash = SecretWebcash.deserialize(batch[webcash_hashed_value])
-                result_amount = decimal.Decimal(result["amount"])
-                if result_amount != wallet_cash.amount:
-                    print(f"Wallet mistakenly thought it had a webcash with amount {wallet_cash.amount} but instead the webcash was for amount {result_amount}; fixing..")
-                    webcash_wallet["webcash"].remove(batch[webcash_hashed_value])
-                    webcash_wallet["webcash"].append("e" + str(result_amount) + ":secret:" + wallet_cash.secret_value)
-
-    save_webcash_wallet(webcash_wallet)
+    try:
+        webcash_wallet.check()
+    except Exception as e:
+        print(f"Something went wrong: {e}")
+    finally: 
+        save_webcash_wallet(webcash_wallet)
 
 @cli.command("check")
 @lock_wallet
@@ -289,87 +713,15 @@ def recover(gaplimit):
     # number more of the secrets.
     gaplimit = int(gaplimit)
 
-    # Check all the webcash in the wallet and remove any webcash that has been
-    # already spent.
-    check_wallet()
-
-    # check_wallet will save the wallet, so load it again
     webcash_wallet = load_webcash_wallet()
 
-    for chain_code in webcash_wallet["walletdepths"].keys():
-        # keep track of where we're at in this process
-        current_walletdepth = 0
-
-        reported_walletdepth = webcash_wallet["walletdepths"][chain_code]
-
-        # Iterate through gaplimit-many secrets at a time and check each one.
-        _idx = 0
-        last_used_walletdepth = 0
-        has_had_webcash = True
-        while has_had_webcash:
-            print(f"Checking gaplimit {gaplimit} secrets for chaincode {chain_code}, round {_idx}...")
-
-            # assume this is the last iteration
-            has_had_webcash = False
-
-            # Check the next gaplimit number of secrets. Continue to the next round
-            # if any of the secrets have ever been used, regardless of whether they
-            # still have value.
-
-            check_webcashes = {}
-            for x in range(current_walletdepth, current_walletdepth + gaplimit):
-                secret = generate_new_secret(webcash_wallet, chain_code=chain_code, walletdepth=x)
-                webcash = SecretWebcash.deserialize("e1:secret:" + secret)
-                check_webcashes[webcash.to_public().hashed_value] = webcash
-                webcash.walletdepth = x
-
-            health_check_request = [str(swc.to_public()) for (pwc, swc) in check_webcashes.items()]
-            response = requests.post("https://webcash.org/api/v1/health_check", json=health_check_request)
-            if response.status_code != 200:
-                raise Exception("Something went wrong on the server: ", response.content)
-            response = json.loads(response.content)
-            if response.get("status", "") != "success":
-                raise Exception("Something went wrong on the server: ", json.dumps(response))
-
-            #idx = 0
-            for (public_webcash, result) in response["results"].items():
-                public_webcash = PublicWebcash.deserialize(public_webcash).hashed_value
-
-                if result["spent"] != None:
-                    has_had_webcash = True
-                    #last_used_walletdepth = current_walletdepth + idx
-                    last_used_walletdepth = check_webcashes[public_webcash].walletdepth
-
-                if result["spent"] == False:
-                    wc = check_webcashes[public_webcash]
-                    wc.amount = decimal.Decimal(result["amount"])
-                    if chain_code.upper() != "PAY" and str(wc) not in webcash_wallet["webcash"]:
-                        print(f"Recovered webcash: {wc.amount}")
-                        webcash_wallet["webcash"].append(str(check_webcashes[public_webcash]))
-                    else:
-                        print(f"Found known webcash of amount: {wc.amount} (might be a payment)")
-
-                #idx += 1
-
-            # continue anyway if the wallet says its walletdepth is greater
-            #if max([wc.walletdepth for wc in check_webcashes.values()]) < reported_walletdepth:
-            if current_walletdepth < reported_walletdepth:
-                has_had_webcash = True
-
-            if has_had_webcash:
-                current_walletdepth = current_walletdepth + gaplimit
-
-            _idx += 1
-
-        if reported_walletdepth > last_used_walletdepth + 1:
-            print(f"Something may have gone wrong: reported walletdepth was {reported_walletdepth} but only found up to {last_used_walletdepth} depth")
-
-        if reported_walletdepth < last_used_walletdepth:
-            webcash_wallet["walletdepths"][chain_code] = last_used_walletdepth + 1
-
-    # TODO: only save the wallet when it has been modified?
-    print("Saving wallet...")
-    save_webcash_wallet(webcash_wallet)
+    try:
+        webcash_wallet.recover(gaplimit, skip_check_wallet=False)
+    except Exception as e:
+        print(f"Something went wrong: {e}")
+    finally:
+        # TODO: only save the wallet when it has been modified?
+        save_webcash_wallet(webcash_wallet)
 
 @cli.command("insert")
 @click.argument("webcash")
@@ -381,51 +733,15 @@ def insert(webcash, memo=""):
 
     webcash_wallet = load_webcash_wallet()
 
-    acks = check_legal_agreements(webcash_wallet)
-    if not acks:
-        print("User must acknowledge and agree to agreements first.")
-        return
-
-    # make sure it's valid webcash
-    webcash = SecretWebcash.deserialize(webcash)
-
-    # store it in a new webcash
-    new_webcash = SecretWebcash(amount=webcash.amount, secret_value=generate_new_secret(webcash_wallet, chain_code="RECEIVE"))
-
-    replace_request = {
-        "webcashes": [str(webcash)],
-        "new_webcashes": [str(new_webcash)],
-        "legalese": webcash_wallet["legalese"],
-    }
-    # Save the webcash to the wallet in case there is a network error while
-    # attempting to replace it.
-    unconfirmed_webcash = [str(webcash), str(new_webcash)]
-    webcash_wallet["unconfirmed"].extend(unconfirmed_webcash)
-    save_webcash_wallet(webcash_wallet)
-    #print("Sending to the server this replacement request: ", replace_request)
-
-    response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
-    if response.status_code != 200:
-        raise Exception("Something went wrong on the server: ", response.content)
-
-    # save this one in the wallet
-    webcash_wallet["webcash"].append(str(new_webcash))
-
-    # remove "unconfirmed" webcash
-    for wc in unconfirmed_webcash:
-        webcash_wallet["unconfirmed"].remove(wc)
-
-    # preserve the memo
-    webcash_wallet["log"].append({
-        "type": "receive",
-        "memo": str(memo),
-        "amount": str(new_webcash.amount),
-        "input_webcash": str(webcash),
-        "output_webcash": str(new_webcash),
-    })
-
-    save_webcash_wallet(webcash_wallet)
-    print(f"Done! Saved e{new_webcash.amount} in the wallet, with the memo: {memo}")
+    try:
+        result = webcash_wallet.insert(webcash, memo=memo)
+    except Exception as e:
+        print(f"Something went wrong: {e}")
+    finally:
+        save_webcash_wallet(webcash_wallet)
+        print(f"Done! Saved e{result.amount} in the wallet, with the memo: {memo}")
+        
+    return result
 
 @cli.command("insertmany")
 @click.argument("webcash", nargs=-1)
@@ -437,200 +753,37 @@ def insertmany(webcash):
     webcash on the command line.
     """
 
-    # TODO: consolidate common functionality duplicated with "insert"
-
     webcash_wallet = load_webcash_wallet()
 
-    # TODO: move this into a shared decorator
-    acks = check_legal_agreements(webcash_wallet)
-    if not acks:
-        print("User must acknowledge and agree to agreements first.")
-        return
+    try:
+        merged_webcash = webcash_wallet.insertmany(webcash)
+    except Exception as e:
+        print(f"Something went wrong: {e}")
+    finally:
+        save_webcash_wallet(webcash_wallet)
+        print(f"Done! Saved e{merged_webcash.amount} in the wallet.")
 
-    # use set to filter out duplicates by total string value
-    webcashes = list(set(webcash))
-
-    # deserialize
-    webcashes = [SecretWebcash.deserialize(wc) for wc in webcash]
-
-    # further filter out duplicates by secret_value
-    wc_secrets = [wc.secret_value for wc in webcashes]
-    deduped = list(set([(wc_secrets.count(wc.secret_value), str(wc)) for wc in webcashes]))
-    webcashes = [SecretWebcash.deserialize(x[1]) for x in deduped]
-
-    total_amount = sum([wc.amount for wc in webcashes])
-
-    merged_webcash_secret = generate_new_secret(webcash_wallet, chain_code="RECEIVE")
-    merged_webcash = SecretWebcash(amount=decimal.Decimal(total_amount), secret_value=merged_webcash_secret)
-
-    replace_request = {
-        "webcashes": [str(wc) for wc in webcashes],
-        "new_webcashes": [str(merged_webcash)],
-        "legalese": webcash_wallet["legalese"],
-    }
-
-    unconfirmed_webcashes = [str(wc) for wc in webcashes] + [str(merged_webcash)]
-    webcash_wallet["unconfirmed"].extend(unconfirmed_webcashes)
-    save_webcash_wallet(webcash_wallet)
-
-    response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
-    if response.status_code != 200:
-        raise Exception("Something went wrong on the server: ", response.content)
-
-    webcash_wallet["webcash"].append(str(merged_webcash))
-
-    # remove "unconfirmed" webcash
-    for wc in unconfirmed_webcashes:
-        webcash_wallet["unconfirmed"].remove(wc)
-
-    webcash_wallet["log"].append({
-        "type": "receive",
-        "memo": "",
-        "amount": str(merged_webcash.amount),
-        "input_webcash": [str(wc) for wc in webcashes],
-        "output_webcash": [str(merged_webcash)],
-    })
-
-    save_webcash_wallet(webcash_wallet)
-    print(f"Done! Saved e{merged_webcash.amount} in the wallet.")
+    return merged_webcash
 
 @cli.command("pay")
 @click.argument('amount')
 @click.argument('memo', nargs=-1)
 @lock_wallet
 def pay(amount, memo=""):
-    amount = deserialize_amount(str(amount))
-    int(amount) # just to make sure
-    amount += FEE_AMOUNT # fee...
+    if type(memo) == list or type(memo) == tuple:
+        memo = " ".join(memo)
+
     webcash_wallet = load_webcash_wallet()
 
-    acks = check_legal_agreements(webcash_wallet)
-    if not acks:
-        print("User must acknowledge and agree to all agreements first.")
-        return
-
-    # scan for an amount
-    use_this_webcash = []
-    for webcash in webcash_wallet["webcash"]:
-        webcash = SecretWebcash.deserialize(webcash)
-
-        if webcash.amount >= amount:
-            use_this_webcash.append(webcash)
-            break
-    else:
-        running_amount = decimal.Decimal(0)
-        running_webcash = []
-        for webcash in webcash_wallet["webcash"]:
-            webcash = SecretWebcash.deserialize(webcash)
-            running_webcash.append(webcash)
-            running_amount += webcash.amount
-
-            if running_amount >= amount:
-                use_this_webcash = running_webcash
-                break
-        else:
-            print("Couldn't find enough webcash in the wallet.")
-            sys.exit(0)
-
-    found_amount = sum([ec.amount for ec in use_this_webcash])
-    print(f"found_amount: {found_amount}")
-    if found_amount > (amount + FEE_AMOUNT): # +1 for the fee
-        change = found_amount - amount - FEE_AMOUNT
-        print(f"change: {change}")
-
-        mychange = SecretWebcash(amount=change, secret_value=generate_new_secret(webcash_wallet, chain_code="CHANGE"))
-        payable = SecretWebcash(amount=amount, secret_value=generate_new_secret(webcash_wallet, chain_code="PAY"))
-
-        replace_request = {
-            "webcashes": [str(ec) for ec in use_this_webcash],
-            "new_webcashes": [str(mychange), str(payable)],
-            "legalese": webcash_wallet["legalese"],
-        }
-
-        # Save the webcash to the wallet in case there is a network error while
-        # attempting to replace it.
-        unconfirmed_webcash = [str(mychange), str(payable)]
-        webcash_wallet["unconfirmed"].extend(unconfirmed_webcash)
+    try:
+        webcash = webcash_wallet.pay(amount=amount, memo=memo)
+    except Exception as e:
+        print(f"Something went wrong: {e}")
+    finally:
+        print(f"Make this payment using the following webcash: {str(webcash)}")
         save_webcash_wallet(webcash_wallet)
 
-        # Attempt replacement
-        #print("Sending to the server this replacement request: ", replace_request)
-        response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
-
-        if response.status_code != 200:
-            raise Exception("Something went wrong on the server: ", response.content)
-
-        # remove old webcashes
-        for ec in use_this_webcash:
-            #new_wallet = [x for x in webcash_wallet["webcash"] if x != str(ec)]
-            #webcash_wallet["webcash"] = new_wallet
-            webcash_wallet["webcash"].remove(str(ec))
-
-        # remove unconfirmed webcashes
-        for wc in unconfirmed_webcash:
-            webcash_wallet["unconfirmed"].remove(wc)
-
-        # store change
-        webcash_wallet["webcash"].append(str(mychange))
-
-        log_entry = {
-            "type": "change",
-            "amount": str(mychange.amount),
-            "webcash": str(mychange),
-            "timestamp": str(datetime.datetime.now()),
-        }
-        webcash_wallet["log"].append(log_entry)
-
-        use_this_webcash = [payable]
-    elif found_amount == amount + FEE_AMOUNT:
-        payable = SecretWebcash(amount=amount, secret_value=generate_new_secret(webcash_wallet, chain_code="PAY"))
-
-        replace_request = {
-            "webcashes": [str(ec) for ec in use_this_webcash],
-            "new_webcashes": [str(payable)],
-            "legalese": webcash_wallet["legalese"],
-        }
-        # Save the webcash to the wallet in case there is a network error while
-        # attempting to replace it.
-        unconfirmed_webcash = [str(payable)]
-        webcash_wallet["unconfirmed"].extend(unconfirmed_webcash)
-        save_webcash_wallet(webcash_wallet)
-
-        #print("replace_request: ", replace_request)
-
-        #print("Sending to the server this replacement request: ", replace_request)
-        response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
-
-        if response.status_code != 200:
-            raise Exception("Something went wrong on the server: ", response.content)
-
-        # remove unconfirmed webcashes
-        for wc in unconfirmed_webcash:
-            webcash_wallet["unconfirmed"].remove(wc)
-
-        # remove old webcashes
-        for ec in use_this_webcash:
-            #new_wallet = [x for x in webcash_wallet["webcash"] if x != str(ec)]
-            #webcash_wallet["webcash"] = new_wallet
-            webcash_wallet["webcash"].remove(str(ec))
-
-        use_this_webcash = [payable]
-    else:
-        raise NotImplementedError
-
-    # store a record of this transaction
-    webcash_wallet["log"].append({
-        "type": "payment",
-        "memo": " ".join(memo),
-        "amount": str(amount),
-        "input_webcashes": [str(ec) for ec in use_this_webcash],
-        "output_webcash": str(payable),
-        "timestamp": str(datetime.datetime.now()),
-    })
-
-    print(f"Make this payment using the following webcash: {str(use_this_webcash[0])}")
-
-    save_webcash_wallet(webcash_wallet)
+    return webcash
 
 def main():
     # Create a new webcash wallet if one does not already exist.

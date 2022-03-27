@@ -120,17 +120,6 @@ def deserialize_webcash(value: str):
         #hashed_value = value
         #return cls(None, hashed_value)
 
-def check_legal_agreements(webcash_wallet):
-    """
-    webcash disclosures must be acknowledged before the user can use this
-    product.
-    """
-    acknowledgements = webcash_wallet["legalese"].items()
-    expected = LEGALESE.keys()
-    has_expected = all([expectation in webcash_wallet["legalese"].keys() for expectation in expected])
-    agreement = all(ack[1] == True for ack in acknowledgements)
-    return has_expected and agreement
-
 class SecretWebcash:
     """
     SecretWebcash is an object that serializes an amount and a secret_value.
