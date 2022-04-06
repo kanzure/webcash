@@ -69,7 +69,7 @@ def amount_to_str(amount):
     elif amount == None:
         return "?"
     else:
-        return str(amount)
+        return f'{amount:0.8f}' # always include 8 decimals
 
 def deserialize_amount(amount: str):
     """
@@ -156,7 +156,7 @@ class SecretWebcash:
 
     def __repr__(self):
         amount = amount_to_str(self.amount)
-        return f"SecretWebcash(amount=\"{self.amount}\", secret_value=\"{self.secret_value}\")"
+        return f"SecretWebcash(amount=\"{amount}\", secret_value=\"{self.secret_value}\")"
 
     def __str__(self):
         amount = amount_to_str(self.amount)
@@ -211,7 +211,7 @@ class PublicWebcash:
 
     def __repr__(self):
         amount = amount_to_str(self.amount)
-        return f"PublicWebcash(amount=\"{self.amount}\", hashed_value=\"{self.hashed_value}\")"
+        return f"PublicWebcash(amount=\"{amount}\", hashed_value=\"{self.hashed_value}\")"
 
     def __str__(self):
         amount = amount_to_str(self.amount)
