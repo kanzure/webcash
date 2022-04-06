@@ -417,7 +417,7 @@ def insert(webcash, memo=""):
 
     # preserve the memo
     webcash_wallet["log"].append({
-        "type": "receive",
+        "type": "insert",
         "memo": str(memo),
         "amount": str(new_webcash.amount),
         "input_webcash": str(webcash),
@@ -485,7 +485,7 @@ def insertmany(webcash):
         webcash_wallet["unconfirmed"].remove(wc)
 
     webcash_wallet["log"].append({
-        "type": "receive",
+        "type": "insert",
         "memo": "",
         "amount": str(merged_webcash.amount),
         "input_webcash": [str(wc) for wc in webcashes],
