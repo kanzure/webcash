@@ -33,12 +33,12 @@ class SecretWebcashTestCase(unittest.TestCase):
         amount = 500
         secret_value = "feedbeef"
         n1 = SecretWebcash(amount, secret_value)
-        self.assertEqual(str(n1), f"e500.00000000:secret:{secret_value}")
+        self.assertEqual(str(n1), f"e{amount}:secret:{secret_value}")
 
     def test_bank_webcash_repr(self):
         amount = 120
         n1 = SecretWebcash(amount, "feedbeef")
-        self.assertEqual(repr(n1), f"SecretWebcash(amount=\"120.00000000\", secret_value=\"feedbeef\")")
+        self.assertEqual(repr(n1), f"SecretWebcash(amount=\"{amount}\", secret_value=\"feedbeef\")")
 
     def test_amounts(self):
         count = 12
@@ -65,15 +65,15 @@ class SecretWebcashTestCase(unittest.TestCase):
             },
             { "val": Decimal("1E-6"),
               "in":  "e1E-6:secret:feedbeef",
-              "out": "e0.00000100:secret:feedbeef"
+              "out": "e0.000001:secret:feedbeef"
             },
             { "val": Decimal("1E-6"),
               "in":  "e0.00000100:secret:feedbeef",
-              "out": "e0.00000100:secret:feedbeef"
+              "out": "e0.000001:secret:feedbeef"
             },
             { "val": Decimal("100.001"),
               "in":  "e100.00100000:secret:feedbeef",
-              "out": "e100.00100000:secret:feedbeef"
+              "out": "e100.001:secret:feedbeef"
             },
         ];
         for exp in expectations:

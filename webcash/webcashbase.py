@@ -1,4 +1,5 @@
 import decimal
+import re
 import secrets
 import hashlib
 
@@ -69,7 +70,12 @@ def amount_to_str(amount):
     elif amount == None:
         return "?"
     else:
-        return f'{amount:0.8f}' # always include 8 decimals
+        sign, digits, exponent = amount.as_tuple();
+        if exponent == 0: # amount has no decimals
+            return str(amount)
+        else:
+            amount_str = f'{amount:0.8f}' # force 8 decimals
+            return re.sub(r'\.?0+$', '', amount_str) # trim any trailing zeros
 
 def deserialize_amount(amount: str):
     """
