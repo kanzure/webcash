@@ -33,6 +33,7 @@ from .webcashbase import (
     SecretWebcash,
     PublicWebcash,
     LEGALESE,
+    amount_to_str,
     check_legal_agreements,
     deserialize_amount,
 )
@@ -163,7 +164,7 @@ def get_info():
         webcash = SecretWebcash.deserialize(webcash)
         amount += webcash.amount
 
-    print(f"Total amount stored in this wallet (if secure): e{amount}")
+    print(f"Total amount stored in this wallet (if secure): e{amount_to_str(amount)}")
 
     walletdepths = webcash_wallet["walletdepths"]
     print(f"walletdepth: {walletdepths}")
@@ -265,9 +266,11 @@ def check_wallet():
                 wallet_cash = SecretWebcash.deserialize(batch[webcash_hashed_value])
                 result_amount = decimal.Decimal(result["amount"])
                 if result_amount != wallet_cash.amount:
-                    print(f"Wallet mistakenly thought it had a webcash with amount {wallet_cash.amount} but instead the webcash was for amount {result_amount}; fixing..")
+                    expect_str = amount_to_str(wallet_cash.amount)
+                    result_str = amount_to_str(result_amount)
+                    print(f"Wallet mistakenly thought it had a webcash with amount {expect_str} but instead the webcash was for amount {result_str}; fixing..")
                     webcash_wallet["webcash"].remove(batch[webcash_hashed_value])
-                    webcash_wallet["webcash"].append("e" + str(result_amount) + ":secret:" + wallet_cash.secret_value)
+                    webcash_wallet["webcash"].append("e" + result_str + ":secret:" + wallet_cash.secret_value)
 
     save_webcash_wallet(webcash_wallet)
 
@@ -344,10 +347,10 @@ def recover(gaplimit):
                     wc = check_webcashes[public_webcash]
                     wc.amount = decimal.Decimal(result["amount"])
                     if chain_code.upper() != "PAY" and str(wc) not in webcash_wallet["webcash"]:
-                        print(f"Recovered webcash: {wc.amount}")
+                        print(f"Recovered webcash: {amount_to_str(wc.amount)}")
                         webcash_wallet["webcash"].append(str(check_webcashes[public_webcash]))
                     else:
-                        print(f"Found known webcash of amount: {wc.amount} (might be a payment)")
+                        print(f"Found known webcash of amount: {amount_to_str(wc.amount)} (might be a payment)")
 
                 #idx += 1
 
@@ -419,14 +422,14 @@ def insert(webcash, memo=""):
     webcash_wallet["log"].append({
         "type": "insert",
         "memo": str(memo),
-        "amount": str(new_webcash.amount),
+        "amount": amount_to_str(new_webcash.amount),
         "input_webcash": str(webcash),
         "output_webcash": str(new_webcash),
         "timestamp": str(datetime.datetime.now()),
     })
 
     save_webcash_wallet(webcash_wallet)
-    print(f"Done! Saved e{new_webcash.amount} in the wallet, with the memo: {memo}")
+    print(f"Done! Saved e{amount_to_str(new_webcash.amount)} in the wallet, with the memo: {memo}")
 
 @cli.command("insertmany")
 @click.argument("webcash", nargs=-1)
@@ -487,14 +490,14 @@ def insertmany(webcash):
     webcash_wallet["log"].append({
         "type": "insert",
         "memo": "",
-        "amount": str(merged_webcash.amount),
+        "amount": amount_to_str(merged_webcash.amount),
         "input_webcash": [str(wc) for wc in webcashes],
         "output_webcash": [str(merged_webcash)],
         "timestamp": str(datetime.datetime.now()),
     })
 
     save_webcash_wallet(webcash_wallet)
-    print(f"Done! Saved e{merged_webcash.amount} in the wallet.")
+    print(f"Done! Saved e{amount_to_str(merged_webcash.amount)} in the wallet.")
 
 @cli.command("pay")
 @click.argument('amount')
@@ -535,10 +538,10 @@ def pay(amount, memo=""):
             sys.exit(0)
 
     found_amount = sum([ec.amount for ec in use_this_webcash])
-    print(f"found_amount: {found_amount}")
+    print(f"found_amount: {amount_to_str(found_amount)}")
     if found_amount > (amount + FEE_AMOUNT): # +1 for the fee
         change = found_amount - amount - FEE_AMOUNT
-        print(f"change: {change}")
+        print(f"change: {amount_to_str(change)}")
 
         mychange = SecretWebcash(amount=change, secret_value=generate_new_secret(webcash_wallet, chain_code="CHANGE"))
         payable = SecretWebcash(amount=amount, secret_value=generate_new_secret(webcash_wallet, chain_code="PAY"))
@@ -577,7 +580,7 @@ def pay(amount, memo=""):
 
         log_entry = {
             "type": "change",
-            "amount": str(mychange.amount),
+            "amount": amount_to_str(mychange.amount),
             "webcash": str(mychange),
             "timestamp": str(datetime.datetime.now()),
         }
@@ -624,7 +627,7 @@ def pay(amount, memo=""):
     webcash_wallet["log"].append({
         "type": "payment",
         "memo": " ".join(memo),
-        "amount": str(amount),
+        "amount": amount_to_str(amount),
         "input_webcashes": [str(ec) for ec in use_this_webcash],
         "output_webcash": str(payable),
         "timestamp": str(datetime.datetime.now()),

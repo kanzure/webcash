@@ -54,6 +54,33 @@ class SecretWebcashTestCase(unittest.TestCase):
         assert all([SecretWebcash.deserialize(str(webcash)) == webcash for webcash in webcashes])
         assert all([SecretWebcash.deserialize(str(webcash)).amount == webcash.amount for webcash in webcashes])
 
+        expectations = [
+            { "val": Decimal("1E-8"),
+              "in":  "e1E-8:secret:feedbeef",
+              "out": "e0.00000001:secret:feedbeef"
+            },
+            { "val": Decimal("1E-8"),
+              "in":  "e0.00000001:secret:feedbeef",
+              "out": "e0.00000001:secret:feedbeef"
+            },
+            { "val": Decimal("1E-6"),
+              "in":  "e1E-6:secret:feedbeef",
+              "out": "e0.000001:secret:feedbeef"
+            },
+            { "val": Decimal("1E-6"),
+              "in":  "e0.00000100:secret:feedbeef",
+              "out": "e0.000001:secret:feedbeef"
+            },
+            { "val": Decimal("100.001"),
+              "in":  "e100.00100000:secret:feedbeef",
+              "out": "e100.001:secret:feedbeef"
+            },
+        ];
+        for exp in expectations:
+            swc = SecretWebcash.deserialize(exp["in"])
+            self.assertEqual(str(swc), exp["out"])
+            self.assertEqual(swc.amount, exp["val"])
+
     def test_invalid_amounts(self):
         amount = Decimal("0.123456789") # too many decimals
         self.assertRaises(AmountException, SecretWebcash, amount=amount, secret_value=secrets.token_hex(8) )
