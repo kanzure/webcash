@@ -159,15 +159,19 @@ def create_webcash_wallet():
 def get_info():
     webcash_wallet = load_webcash_wallet()
 
+    count = 0
     amount = 0
     for webcash in webcash_wallet["webcash"]:
         webcash = SecretWebcash.deserialize(webcash)
         amount += webcash.amount
+        count += 1
 
     print(f"Total amount stored in this wallet (if secure): e{amount_to_str(amount)}")
 
     walletdepths = webcash_wallet["walletdepths"]
     print(f"walletdepth: {walletdepths}")
+
+    print(f"outputs: {count}")
 
 @click.group()
 def cli():
@@ -636,6 +640,87 @@ def pay(amount, memo=""):
     print(f"Make this payment using the following webcash: {str(use_this_webcash[0])}")
 
     save_webcash_wallet(webcash_wallet)
+
+@cli.command("merge")
+@click.option("--group", default="20", help="Maximum number of outputs to merge at once")
+@click.option("--max", default="50000000", help="Maximum output size")
+@click.option("--memo", default="", help="Memo field for the transaction log")
+def merge(group, max, memo):
+    max_inputs = int(group)
+    max_amount = deserialize_amount(max)
+
+    webcash_wallet = load_webcash_wallet()
+    webcash_to_merge = []
+    for webcash in webcash_wallet["webcash"]:
+        webcash = SecretWebcash.deserialize(webcash)
+        if webcash.amount < max_amount:
+            webcash_to_merge.append(webcash)
+    print(f"found {len(webcash_to_merge)} webcash to merge")
+
+    while len(webcash_to_merge) > 1:
+        inputs = []
+        while 0 < len(webcash_to_merge) and len(inputs) < max_inputs:
+            inputs.append(webcash_to_merge.pop())
+
+        total = sum([wc.amount for wc in inputs])
+        change = total
+
+        outputs = []
+        while 0 < change:
+            change_amount = min(change, max_amount)
+            change_secret = generate_new_secret(webcash_wallet, chain_code="CHANGE")
+            outputs.append(SecretWebcash(amount=decimal.Decimal(change_amount), secret_value=change_secret))
+            change -= change_amount
+
+        replace_request = {
+            "webcashes": [str(wc) for wc in inputs],
+            "new_webcashes": [str(wc) for wc in outputs],
+            "legalese": webcash_wallet["legalese"],
+        }
+        print(f"merging {len(replace_request['webcashes'])} outputs into {len(replace_request['new_webcashes'])}")
+
+        # Save the webcash to the wallet in case there is a network error while
+        # attempting to replace it.
+        unconfirmed_webcash = replace_request["new_webcashes"]
+        webcash_wallet["unconfirmed"].extend(unconfirmed_webcash)
+        save_webcash_wallet(webcash_wallet)
+
+        # Send replacement request to the server
+        response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
+        if response.status_code != 200:
+            raise Exception("Something went wrong on the server: ", response.content)
+
+        # remove old webcash
+        for wc in replace_request["webcashes"]:
+            webcash_wallet["webcash"].remove(wc)
+
+        # add new webcash
+        webcash_wallet["webcash"].extend(replace_request["new_webcashes"])
+
+        # remove unconfirmed webcashes
+        for wc in unconfirmed_webcash:
+            webcash_wallet["unconfirmed"].remove(wc)
+
+        # store a record of this transaction
+        webcash_wallet["log"].append({
+            "type": "merge",
+            "memo": " ".join(memo),
+            "amount": 0,
+            "input_webcashes": replace_request["webcashes"],
+            "output_webcash": replace_request["new_webcashes"],
+            "timestamp": str(datetime.datetime.now()),
+        })
+
+        # save the wallet
+        save_webcash_wallet(webcash_wallet)
+
+        # add outputs to our merge list
+        for wc in outputs:
+            if wc.amount < max_amount:
+                webcash_to_merge.append(wc)
+
+    print("Done!")
+
 
 def main():
     # Create a new webcash wallet if one does not already exist.
