@@ -166,7 +166,8 @@ def get_info():
         amount += webcash.amount
         count += 1
 
-    print(f"Total amount stored in this wallet (if secure): e{amount_to_str(amount)}")
+    amount_str = amount_to_str(amount) if amount != 0 else "0"
+    print(f"Total amount stored in this wallet (if secure): e{amount_str}")
 
     walletdepths = webcash_wallet["walletdepths"]
     print(f"walletdepth: {walletdepths}")
