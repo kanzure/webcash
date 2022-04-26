@@ -8,6 +8,22 @@ from .exceptions import (
     DeserializationException,
 )
 
+WEBCASH_WEBSERVER_SCHEME = "https"
+WEBCASH_WEBSERVER_HOSTNAME = "webcash.org"
+
+WEBCASH_ENDPOINT_HEALTH_CHECK = (
+    f"{WEBCASH_WEBSERVER_SCHEME}://{WEBCASH_WEBSERVER_HOSTNAME}/api/v1/health_check"
+)
+WEBCASH_ENDPOINT_MINING_REPORT = (
+    f"{WEBCASH_WEBSERVER_SCHEME}://{WEBCASH_WEBSERVER_HOSTNAME}/api/v1/mining_report"
+)
+WEBCASH_ENDPOINT_REPLACE = (
+    f"{WEBCASH_WEBSERVER_SCHEME}://{WEBCASH_WEBSERVER_HOSTNAME}/api/v1/replace"
+)
+WEBCASH_ENDPOINT_TARGET = (
+    f"{WEBCASH_WEBSERVER_SCHEME}://{WEBCASH_WEBSERVER_HOSTNAME}/api/v1/target"
+)
+
 LEGALESE = {
     "terms": "I acknowledge and agree to the Terms of Service located at https://webcash.org/terms",
 }
