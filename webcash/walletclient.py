@@ -128,8 +128,10 @@ def load_webcash_wallet(filename=WALLET_NAME):
 
 # TODO: encryption
 def save_webcash_wallet(webcash_wallet, filename=WALLET_NAME):
-    with open(filename, "w") as fd:
+    temporary_filename = f"{filename}.{os.getpid()}"
+    with open(temporary_filename, "w") as fd:
         fd.write(json.dumps(webcash_wallet))
+    os.replace(temporary_filename, filename)
     return True
 
 def create_webcash_wallet():
