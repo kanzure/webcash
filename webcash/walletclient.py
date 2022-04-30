@@ -160,7 +160,7 @@ def create_webcash_wallet():
         "walletdepths": generate_initial_walletdepths(),
     }
 
-def get_info():
+def get_info(quiet):
     webcash_wallet = load_webcash_wallet()
 
     count = 0
@@ -171,24 +171,29 @@ def get_info():
         count += 1
 
     amount_str = amount_to_str(amount) if amount != 0 else "0"
-    print(f"Total amount stored in this wallet (if secure): e{amount_str}")
+    if quiet:
+        print(amount_str)
+    else:
+        print(f"Total amount stored in this wallet (if secure): e{amount_str}")
 
     walletdepths = webcash_wallet["walletdepths"]
-    print(f"walletdepth: {walletdepths}")
-
-    print(f"outputs: {count}")
+    if not quiet:
+        print(f"walletdepth: {walletdepths}")
+        print(f"outputs: {count}")
 
 @click.group(context_settings=dict(help_option_names=["-h", "--help"]))
 def cli():
     pass
 
 @cli.command("info", short_help="Print wallet information.")
-def info():
-    return get_info()
+@click.option('-q', '--quiet', is_flag=True, help="Quiet mode.")
+def info(quiet):
+    return get_info(quiet)
 
 @cli.command("status", short_help="Print wallet information. This is an alias for 'info'.", hidden=True)
-def status():
-    return get_info()
+@click.option('-q', '--quiet', is_flag=True, help="Quiet mode.")
+def status(quiet):
+    return get_info(quiet)
 
 def yes_or_no(question):
     while "the user failed to choose y or n":
@@ -228,14 +233,15 @@ def setup():
     webcash_wallet = load_webcash_wallet()
     ask_user_for_legal_agreements(webcash_wallet)
 
-def check_wallet():
+def check_wallet(quiet):
     webcash_wallet = load_webcash_wallet()
 
     outputs = {}
     for webcash in webcash_wallet["webcash"]:
         sk = SecretWebcash.deserialize(webcash)
         if str(sk.to_public().hashed_value) in outputs.keys():
-            print("Duplicate webcash detected in wallet, moving it to unconfirmed")
+            if not quiet:
+                print("Duplicate webcash detected in wallet, moving it to unconfirmed")
             webcash_wallet["unconfirmed"].append(webcash)
             webcash_wallet["webcash"].remove(webcash)
         outputs[str(sk.to_public().hashed_value)] = webcash
@@ -247,7 +253,8 @@ def check_wallet():
             item = outputs.popitem()
             batch[item[0]] = item[1]
 
-        print(f"Checking batch of {len(batch)} public webcash")
+        if not quiet:
+            print(f"Checking batch of {len(batch)} public webcash")
         health_check_request = [str(x) for x in batch.values()]
         response = requests.post(WEBCASH_ENDPOINT_HEALTH_CHECK, json=health_check_request)
         if response.status_code != 200:
@@ -258,7 +265,8 @@ def check_wallet():
 
         for webcash, result in response["results"].items():
             if result["spent"] in (None, True):
-                print(f"Invalid webcash found: {str(webcash)}; removing from wallet")
+                if not quiet:
+                    print(f"Invalid webcash found: {str(webcash)}; removing from wallet")
 
                 # Use this as the key so that amount differences don't cause an
                 # item-not-found error on otherwise same webcash.
@@ -284,14 +292,16 @@ def check_wallet():
     save_webcash_wallet(webcash_wallet)
 
 @cli.command("check", short_help="Check webcash in wallet. Remove any spent webcash.")
+@click.option('-q', '--quiet', is_flag=True, help="Quiet mode.")
 @lock_wallet
-def check():
-    return check_wallet()
+def check(quiet):
+    return check_wallet(quiet)
 
 @cli.command("recover", short_help="Recover webcash using the wallet's master secret.")
 @click.option("--gaplimit", default=20)
+@click.option('-q', '--quiet', is_flag=True, help="Quiet mode.")
 @lock_wallet
-def recover(gaplimit):
+def recover(gaplimit, quiet):
     """
     Recover webcash from a webcash wallet using its master secret as a
     deterministic seed. Also check all webcash in the wallet.
@@ -303,7 +313,7 @@ def recover(gaplimit):
 
     # Check all the webcash in the wallet and remove any webcash that has been
     # already spent.
-    check_wallet()
+    check_wallet(quiet)
 
     # check_wallet will save the wallet, so load it again
     webcash_wallet = load_webcash_wallet()
@@ -319,7 +329,8 @@ def recover(gaplimit):
         last_used_walletdepth = 0
         has_had_webcash = True
         while has_had_webcash:
-            print(f"Checking gaplimit {gaplimit} secrets for chaincode {chain_code}, round {_idx}...")
+            if not quiet:
+                print(f"Checking gaplimit {gaplimit} secrets for chaincode {chain_code}, round {_idx}...")
 
             # assume this is the last iteration
             has_had_webcash = False
@@ -356,10 +367,12 @@ def recover(gaplimit):
                     wc = check_webcashes[public_webcash]
                     wc.amount = decimal.Decimal(result["amount"])
                     if chain_code.upper() != "PAY" and str(wc) not in webcash_wallet["webcash"]:
-                        print(f"Recovered webcash: {amount_to_str(wc.amount)}")
+                        if not quiet:
+                            print(f"Recovered webcash: {amount_to_str(wc.amount)}")
                         webcash_wallet["webcash"].append(str(check_webcashes[public_webcash]))
                     else:
-                        print(f"Found known webcash of amount: {amount_to_str(wc.amount)} (might be a payment)")
+                        if not quiet:
+                            print(f"Found known webcash of amount: {amount_to_str(wc.amount)} (might be a payment)")
 
                 #idx += 1
 
@@ -374,20 +387,23 @@ def recover(gaplimit):
             _idx += 1
 
         if reported_walletdepth > last_used_walletdepth + 1:
-            print(f"Something may have gone wrong: reported walletdepth was {reported_walletdepth} but only found up to {last_used_walletdepth} depth")
+            if not quiet:
+                print(f"Something may have gone wrong: reported walletdepth was {reported_walletdepth} but only found up to {last_used_walletdepth} depth")
 
         if reported_walletdepth < last_used_walletdepth:
             webcash_wallet["walletdepths"][chain_code] = last_used_walletdepth + 1
 
     # TODO: only save the wallet when it has been modified?
-    print("Saving wallet...")
+    if not quiet:
+        print("Saving wallet...")
     save_webcash_wallet(webcash_wallet)
 
 @cli.command("insert", short_help="Insert <webcash> into the wallet.")
 @click.argument("webcash")
+@click.option('-q', '--quiet', is_flag=True, help="Quiet mode.")
 @click.argument("memo", nargs=-1)
 @lock_wallet
-def insert(webcash, memo=""):
+def insert(webcash, quiet, memo=""):
     if type(memo) == list or type(memo) == tuple:
         memo = " ".join(memo)
 
@@ -438,12 +454,14 @@ def insert(webcash, memo=""):
     })
 
     save_webcash_wallet(webcash_wallet)
-    print(f"Done! Saved e{amount_to_str(new_webcash.amount)} in the wallet, with the memo: {memo}")
+    if not quiet:
+        print(f"Done! Saved e{amount_to_str(new_webcash.amount)} in the wallet, with the memo: {memo}")
 
 @cli.command("insertmany", short_help="Insert <webcash_1>, <webcash_2>, ... into the wallet.")
 @click.argument("webcash", nargs=-1)
+@click.option('-q', '--quiet', is_flag=True, help="Quiet mode.")
 @lock_wallet
-def insertmany(webcash):
+def insertmany(webcash, quiet):
     """
     Insert multiple webcash into the wallet at the same time. Each webcash gets
     merged together in a single request. Use whitespace to separate each
@@ -506,13 +524,15 @@ def insertmany(webcash):
     })
 
     save_webcash_wallet(webcash_wallet)
-    print(f"Done! Saved e{amount_to_str(merged_webcash.amount)} in the wallet.")
+    if not quiet:
+        print(f"Done! Saved e{amount_to_str(merged_webcash.amount)} in the wallet.")
 
 @cli.command("pay", short_help="Pay <amount> webcash.")
 @click.argument('amount')
+@click.option('-q', '--quiet', is_flag=True, help="Quiet mode.")
 @click.argument('memo', nargs=-1)
 @lock_wallet
-def pay(amount, memo=""):
+def pay(amount, quiet, memo=""):
     try:
         amount = deserialize_amount(str(amount))
     except decimal.InvalidOperation:
@@ -550,10 +570,12 @@ def pay(amount, memo=""):
             sys.exit(0)
 
     found_amount = sum([ec.amount for ec in use_this_webcash])
-    print(f"found_amount: {amount_to_str(found_amount)}")
+    if not quiet:
+        print(f"found_amount: {amount_to_str(found_amount)}")
     if found_amount > (amount + FEE_AMOUNT): # +1 for the fee
         change = found_amount - amount - FEE_AMOUNT
-        print(f"change: {amount_to_str(change)}")
+        if not quiet:
+            print(f"change: {amount_to_str(change)}")
 
         mychange = SecretWebcash(amount=change, secret_value=generate_new_secret(webcash_wallet, chain_code="CHANGE"))
         payable = SecretWebcash(amount=amount, secret_value=generate_new_secret(webcash_wallet, chain_code="PAY"))
@@ -645,15 +667,19 @@ def pay(amount, memo=""):
         "timestamp": str(datetime.datetime.now()),
     })
 
-    print(f"Make this payment using the following webcash: {str(use_this_webcash[0])}")
+    if quiet:
+        print(use_this_webcash[0])
+    else:
+        print(f"Make this payment using the following webcash: {str(use_this_webcash[0])}")
 
     save_webcash_wallet(webcash_wallet)
 
 @cli.command("merge", short_help="Merge smaller wallet outputs into fewer larger wallet outputs.")
+@click.option('-q', '--quiet', is_flag=True, help="Quiet mode.")
 @click.option("--group", default="20", help="Maximum number of outputs to merge at once")
 @click.option("--max", default="50000000", help="Maximum output size")
 @click.option("--memo", default="", help="Memo field for the transaction log")
-def merge(group, max, memo):
+def merge(quiet, group, max, memo):
     max_inputs = int(group)
     max_amount = deserialize_amount(max)
 
@@ -663,7 +689,8 @@ def merge(group, max, memo):
         webcash = SecretWebcash.deserialize(webcash)
         if webcash.amount < max_amount:
             webcash_to_merge.append(webcash)
-    print(f"found {len(webcash_to_merge)} webcash to merge")
+    if not quiet:
+        print(f"found {len(webcash_to_merge)} webcash to merge")
 
     while len(webcash_to_merge) > 1:
         inputs = []
@@ -685,7 +712,8 @@ def merge(group, max, memo):
             "new_webcashes": [str(wc) for wc in outputs],
             "legalese": webcash_wallet["legalese"],
         }
-        print(f"merging {len(replace_request['webcashes'])} outputs into {len(replace_request['new_webcashes'])}")
+        if not quiet:
+            print(f"merging {len(replace_request['webcashes'])} outputs into {len(replace_request['new_webcashes'])}")
 
         # Save the webcash to the wallet in case there is a network error while
         # attempting to replace it.
@@ -727,7 +755,8 @@ def merge(group, max, memo):
             if wc.amount < max_amount:
                 webcash_to_merge.append(wc)
 
-    print("Done!")
+    if not quiet:
+        print("Done!")
 
 
 def main():
