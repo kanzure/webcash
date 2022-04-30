@@ -8,8 +8,6 @@ import hashlib
 import datetime
 import json
 import base64
-import requests
-import time
 from decimal import Decimal
 
 from webcash.webcashbase import (
@@ -18,6 +16,7 @@ from webcash.webcashbase import (
     WEBCASH_ENDPOINT_MINING_REPORT,
     WEBCASH_ENDPOINT_REPLACE,
     WEBCASH_ENDPOINT_TARGET,
+    log,
 )
 
 from webcash.walletclient import (
@@ -25,6 +24,7 @@ from webcash.walletclient import (
     save_webcash_wallet,
     create_webcash_wallet,
     generate_new_secret,
+    webcash_server_request_raw,
 )
 
 from webcash.utils import lock_wallet
@@ -34,7 +34,7 @@ INTERVAL_LENGTH_IN_SECONDS = 10
 WALLET_FILENAME = "default_wallet.webcash"
 
 def get_protocol_settings():
-    response = requests.get(WEBCASH_ENDPOINT_TARGET)
+    response = webcash_server_request_raw(WEBCASH_ENDPOINT_TARGET)
     # difficulty_target_bits, ratio, mining_amount, mining_subsidy_amount
     return response.json()
 
@@ -53,7 +53,7 @@ def mine():
         webcash_wallet = load_webcash_wallet()
 
     if webcash_wallet["legalese"]["terms"] != True:
-        print("Error: run walletclient.py setup first")
+        log("Error: run walletclient.py setup first")
         sys.exit(1)
 
     attempts = 0
@@ -73,7 +73,7 @@ def mine():
             target = compute_target(difficulty_target_bits)
             speed = attempts // fetch_timedelta.total_seconds() / 1000
             attempts = 0
-            print(f"server says difficulty={difficulty_target_bits} ratio={ratio} speed={speed}khps")
+            log(f"server says difficulty={difficulty_target_bits} ratio={ratio} speed={speed}khps")
 
         mining_amount = Decimal(protocol_settings["mining_amount"])
         mining_subsidy_amount = Decimal(protocol_settings["mining_subsidy_amount"])
@@ -100,7 +100,7 @@ def mine():
         attempts += 1
 
         if work <= target:
-            print(f"success! difficulty_target_bits={difficulty_target_bits} target={hex(target)} work={hex(work)}")
+            log(f"success! difficulty_target_bits={difficulty_target_bits} target={hex(target)} work={hex(work)}")
 
             mining_report = {
                 "work": int(work),
@@ -111,8 +111,8 @@ def mine():
             keep = generate_new_secret(webcash_wallet, chain_code="MINING")
             subsidy = generate_new_secret(webcash_wallet, chain_code="PAY")
 
-            response = requests.post(WEBCASH_ENDPOINT_MINING_REPORT, json=mining_report)
-            print(f"submission response: {response.content}")
+            response = webcash_server_request_raw(WEBCASH_ENDPOINT_MINING_REPORT, mining_report)
+            log(f"submission response: {response.content}")
             if response.status_code != 200:
                 # difficulty may have changed against us
                 last_difficulty_target_fetched_at = datetime.datetime.now() - datetime.timedelta(seconds=20)
@@ -135,7 +135,7 @@ def mine():
                 previous_webcashes = []
                 previous_amount = 0
 
-            print(f"I have created {mining_amount} webcash. Securing secret.")
+            log(f"I have created {mining_amount} webcash. Securing secret.")
             # Use the CHANGE chaincode because the original mined webcash was
             # already recorded in MINING. Everything in MINING that is unspent
             # needs to be replaced, and replacing already-replaced webcash is
@@ -153,14 +153,14 @@ def mine():
             webcash_wallet["unconfirmed"].extend(unconfirmed_webcash)
             save_webcash_wallet(webcash_wallet)
             # Attempt replacement (should not fail!)
-            replace_response = requests.post(WEBCASH_ENDPOINT_REPLACE, json=replace_request)
+            replace_response = webcash_server_request_raw(WEBCASH_ENDPOINT_REPLACE, replace_request)
             if replace_response.status_code != 200:
                 # might happen if difficulty changed against us during mining
                 # in which case we shouldn't get this far
-                print("mining data was: " + str(data))
-                print("mining response was: " + response.content.decode("ascii"))
-                print("webcashes: " + str(keep_webcash))
-                print("new_webcashes: " + str(new_webcash))
+                log("mining data was: " + str(data))
+                log("mining response was: " + response.content.decode("ascii"))
+                log("webcashes: " + str(keep_webcash))
+                log("new_webcashes: " + str(new_webcash))
                 raise Exception("Something went wrong when trying to secure the new webcash.")
             else:
 
@@ -176,7 +176,7 @@ def mine():
                 #webcash = data["webcash"]
                 webcash_wallet["webcash"].extend([str(new_webcash)])
                 save_webcash_wallet(webcash_wallet)
-                print(f"Wallet saved!")
+                log(f"Wallet saved!")
                 #time.sleep(0.25)
 
             keep = generate_new_secret(webcash_wallet, chain_code="MINING", walletdepth=webcash_wallet["walletdepths"]["MINING"] + 0)
