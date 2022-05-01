@@ -174,15 +174,15 @@ def get_info():
 
     print(f"outputs: {count}")
 
-@click.group()
+@click.group(context_settings=dict(help_option_names=["-h", "--help"]))
 def cli():
     pass
 
-@cli.command("info")
+@cli.command("info", short_help="Print wallet information.")
 def info():
     return get_info()
 
-@cli.command("status")
+@cli.command("status", short_help="Print wallet information. This is an alias for 'info'.", hidden=True)
 def status():
     return get_info()
 
@@ -219,7 +219,7 @@ def ask_user_for_legal_agreements(webcash_wallet):
 
         save_webcash_wallet(webcash_wallet)
 
-@cli.command("setup")
+@cli.command("setup", short_help="Perform initial wallet setup.", hidden=True)
 def setup():
     webcash_wallet = load_webcash_wallet()
     ask_user_for_legal_agreements(webcash_wallet)
@@ -279,12 +279,12 @@ def check_wallet():
 
     save_webcash_wallet(webcash_wallet)
 
-@cli.command("check")
+@cli.command("check", short_help="Check webcash in wallet. Remove any spent webcash.")
 @lock_wallet
 def check():
     return check_wallet()
 
-@cli.command("recover")
+@cli.command("recover", short_help="Recover webcash using the wallet's master secret.")
 @click.option("--gaplimit", default=20)
 @lock_wallet
 def recover(gaplimit):
@@ -379,7 +379,7 @@ def recover(gaplimit):
     print("Saving wallet...")
     save_webcash_wallet(webcash_wallet)
 
-@cli.command("insert")
+@cli.command("insert", short_help="Insert <webcash> into the wallet.")
 @click.argument("webcash")
 @click.argument("memo", nargs=-1)
 @lock_wallet
@@ -436,7 +436,7 @@ def insert(webcash, memo=""):
     save_webcash_wallet(webcash_wallet)
     print(f"Done! Saved e{amount_to_str(new_webcash.amount)} in the wallet, with the memo: {memo}")
 
-@cli.command("insertmany")
+@cli.command("insertmany", short_help="Insert <webcash_1>, <webcash_2>, ... into the wallet.")
 @click.argument("webcash", nargs=-1)
 @lock_wallet
 def insertmany(webcash):
@@ -504,7 +504,7 @@ def insertmany(webcash):
     save_webcash_wallet(webcash_wallet)
     print(f"Done! Saved e{amount_to_str(merged_webcash.amount)} in the wallet.")
 
-@cli.command("pay")
+@cli.command("pay", short_help="Pay <amount> webcash.")
 @click.argument('amount')
 @click.argument('memo', nargs=-1)
 @lock_wallet
@@ -642,7 +642,7 @@ def pay(amount, memo=""):
 
     save_webcash_wallet(webcash_wallet)
 
-@cli.command("merge")
+@cli.command("merge", short_help="Merge smaller wallet outputs into fewer larger wallet outputs.")
 @click.option("--group", default="20", help="Maximum number of outputs to merge at once")
 @click.option("--max", default="50000000", help="Maximum output size")
 @click.option("--memo", default="", help="Memo field for the transaction log")
