@@ -36,6 +36,8 @@ from .webcashbase import (
     amount_to_str,
     check_legal_agreements,
     deserialize_amount,
+    WEBCASH_ENDPOINT_HEALTH_CHECK,
+    WEBCASH_ENDPOINT_REPLACE,
 )
 
 from .utils import lock_wallet
@@ -247,7 +249,7 @@ def check_wallet():
 
         print(f"Checking batch of {len(batch)} public webcash")
         health_check_request = [str(x) for x in batch.values()]
-        response = requests.post("https://webcash.org/api/v1/health_check", json=health_check_request)
+        response = requests.post(WEBCASH_ENDPOINT_HEALTH_CHECK, json=health_check_request)
         if response.status_code != 200:
             raise Exception("Something went wrong on the server: ", response.content)
         response = json.loads(response.content)
@@ -334,7 +336,7 @@ def recover(gaplimit):
                 webcash.walletdepth = x
 
             health_check_request = [str(swc.to_public()) for (pwc, swc) in check_webcashes.items()]
-            response = requests.post("https://webcash.org/api/v1/health_check", json=health_check_request)
+            response = requests.post(WEBCASH_ENDPOINT_HEALTH_CHECK, json=health_check_request)
             if response.status_code != 200:
                 raise Exception("Something went wrong on the server: ", response.content)
             response = json.loads(response.content)
@@ -414,7 +416,7 @@ def insert(webcash, memo=""):
     save_webcash_wallet(webcash_wallet)
     #print("Sending to the server this replacement request: ", replace_request)
 
-    response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
+    response = requests.post(WEBCASH_ENDPOINT_REPLACE, json=replace_request)
     if response.status_code != 200:
         raise click.ClickException(f"Something went wrong on the server: {response.content}")
 
@@ -484,7 +486,7 @@ def insertmany(webcash):
     webcash_wallet["unconfirmed"].extend(unconfirmed_webcashes)
     save_webcash_wallet(webcash_wallet)
 
-    response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
+    response = requests.post(WEBCASH_ENDPOINT_REPLACE, json=replace_request)
     if response.status_code != 200:
         raise Exception("Something went wrong on the server: ", response.content)
 
@@ -570,7 +572,7 @@ def pay(amount, memo=""):
 
         # Attempt replacement
         #print("Sending to the server this replacement request: ", replace_request)
-        response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
+        response = requests.post(WEBCASH_ENDPOINT_REPLACE, json=replace_request)
 
         if response.status_code != 200:
             raise Exception("Something went wrong on the server: ", response.content)
@@ -614,7 +616,7 @@ def pay(amount, memo=""):
         #print("replace_request: ", replace_request)
 
         #print("Sending to the server this replacement request: ", replace_request)
-        response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
+        response = requests.post(WEBCASH_ENDPOINT_REPLACE, json=replace_request)
 
         if response.status_code != 200:
             raise Exception("Something went wrong on the server: ", response.content)
@@ -692,7 +694,7 @@ def merge(group, max, memo):
         save_webcash_wallet(webcash_wallet)
 
         # Send replacement request to the server
-        response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
+        response = requests.post(WEBCASH_ENDPOINT_REPLACE, json=replace_request)
         if response.status_code != 200:
             raise Exception("Something went wrong on the server: ", response.content)
 
