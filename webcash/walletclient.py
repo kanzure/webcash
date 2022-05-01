@@ -414,7 +414,7 @@ def insert(webcash, memo=""):
 
     response = requests.post("https://webcash.org/api/v1/replace", json=replace_request)
     if response.status_code != 200:
-        raise Exception("Something went wrong on the server: ", response.content)
+        raise click.ClickException(f"Something went wrong on the server: {response.content}")
 
     # save this one in the wallet
     webcash_wallet["webcash"].append(str(new_webcash))
@@ -509,7 +509,10 @@ def insertmany(webcash):
 @click.argument('memo', nargs=-1)
 @lock_wallet
 def pay(amount, memo=""):
-    amount = deserialize_amount(str(amount))
+    try:
+        amount = deserialize_amount(str(amount))
+    except decimal.InvalidOperation:
+        raise click.ClickException("Invalid decimal format.")
     int(amount) # just to make sure
     amount += FEE_AMOUNT # fee...
     webcash_wallet = load_webcash_wallet()
