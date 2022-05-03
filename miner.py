@@ -8,8 +8,6 @@ import hashlib
 import datetime
 import json
 import base64
-import requests
-import time
 from decimal import Decimal
 
 from webcash.webcashbase import (
@@ -25,6 +23,7 @@ from webcash.walletclient import (
     save_webcash_wallet,
     create_webcash_wallet,
     generate_new_secret,
+    webcash_server_request_raw,
 )
 
 from webcash.utils import lock_wallet
@@ -34,7 +33,7 @@ INTERVAL_LENGTH_IN_SECONDS = 10
 WALLET_FILENAME = "default_wallet.webcash"
 
 def get_protocol_settings():
-    response = requests.get(WEBCASH_ENDPOINT_TARGET)
+    response = webcash_server_request_raw(WEBCASH_ENDPOINT_TARGET)
     # difficulty_target_bits, ratio, mining_amount, mining_subsidy_amount
     return response.json()
 
@@ -111,7 +110,7 @@ def mine():
             keep = generate_new_secret(webcash_wallet, chain_code="MINING")
             subsidy = generate_new_secret(webcash_wallet, chain_code="PAY")
 
-            response = requests.post(WEBCASH_ENDPOINT_MINING_REPORT, json=mining_report)
+            response = webcash_server_request_raw(WEBCASH_ENDPOINT_MINING_REPORT, mining_report)
             print(f"submission response: {response.content}")
             if response.status_code != 200:
                 # difficulty may have changed against us
@@ -153,7 +152,7 @@ def mine():
             webcash_wallet["unconfirmed"].extend(unconfirmed_webcash)
             save_webcash_wallet(webcash_wallet)
             # Attempt replacement (should not fail!)
-            replace_response = requests.post(WEBCASH_ENDPOINT_REPLACE, json=replace_request)
+            replace_response = webcash_server_request_raw(WEBCASH_ENDPOINT_REPLACE, replace_request)
             if replace_response.status_code != 200:
                 # might happen if difficulty changed against us during mining
                 # in which case we shouldn't get this far
