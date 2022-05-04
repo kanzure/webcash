@@ -1,6 +1,9 @@
 import decimal
-import secrets
 import hashlib
+import logging
+import os
+import secrets
+import sys
 
 from .exceptions import (
     AmountException,
@@ -26,6 +29,27 @@ WEBCASH_ENDPOINT_TARGET = (
 LEGALESE = {
     "terms": "I acknowledge and agree to the Terms of Service located at https://webcash.org/terms",
 }
+
+debug_mode = (
+    os.getenv("WEBCASH_DEBUG") is not None and os.getenv("WEBCASH_DEBUG") != "0"
+)
+
+logging.basicConfig(
+    datefmt="%Y-%m-%d %H:%M:%S",
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(filename="webcash.log"),
+        logging.StreamHandler(sys.stdout),
+    ],
+    level=(logging.DEBUG if debug_mode else logging.INFO),
+)
+logger = logging.getLogger(__name__)
+
+def log(s):
+    logger.info(s)
+
+def log_debug(s):
+    logger.debug(s)
 
 def compute_target(difficulty_target_bits):
     """
