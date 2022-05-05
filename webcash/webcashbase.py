@@ -35,10 +35,8 @@ debug_mode = (
 )
 
 logging.basicConfig(
-    datefmt="%Y-%m-%d %H:%M:%S",
-    format="%(asctime)s [%(levelname)s] %(message)s",
+    format="%(message)s",
     handlers=[
-        logging.FileHandler(filename="webcash.log"),
         logging.StreamHandler(sys.stdout),
     ],
     level=(logging.DEBUG if debug_mode else logging.INFO),
