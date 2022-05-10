@@ -262,7 +262,7 @@ def check_wallet():
             batch[item[0]] = item[1]
 
         print(f"Checking batch of {len(batch)} public webcash")
-        health_check_request = [str(x) for x in batch.values()]
+        health_check_request = [str(SecretWebcash.deserialize(secret_webcash_str).to_public()) for secret_webcash_str in batch.values()]
         response = webcash_server_request(WEBCASH_ENDPOINT_HEALTH_CHECK, health_check_request)
 
         for webcash, result in response["results"].items():
