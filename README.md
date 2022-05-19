@@ -21,7 +21,7 @@ pip3 install .
 If you want to run the software without installing the module, you still need to install the dependencies:
 
 ```
-pip3 install requirements.txt
+pip3 install -r requirements.txt
 python3 -m webcash.walletclient info
 ```
 
