@@ -21,6 +21,7 @@ import decimal
 import secrets
 import hashlib
 import datetime
+import string
 import struct
 import os
 import sys
@@ -45,6 +46,8 @@ from .utils import lock_wallet
 # unused?
 FEE_AMOUNT = 0
 
+BATCH_SIZE = 25
+
 WALLET_NAME = "default_wallet.webcash"
 
 CHAIN_CODES = {
@@ -53,6 +56,22 @@ CHAIN_CODES = {
     "CHANGE": 2,
     "MINING": 3,
 }
+
+
+def is_master_secret(s):
+    return len(s) == 64 and all(c in string.hexdigits for c in s)
+
+
+def get_deterministic_secret(master_secret_hex, chain_code, wallet_depth):
+    assert is_master_secret(master_secret_hex)
+    assert chain_code == chain_code.upper()
+    assert wallet_depth >= 0
+    tag = hashlib.sha256(b"webcashwalletv1").digest()
+    secret = hashlib.sha256(tag + tag)
+    secret.update(convert_secret_hex_to_bytes(master_secret_hex))
+    secret.update(struct.pack(">Q", CHAIN_CODES[chain_code])) # big-endian
+    secret.update(struct.pack(">Q", wallet_depth))
+    return secret.hexdigest()
 
 def convert_secret_hex_to_bytes(secret):
     """
@@ -64,6 +83,7 @@ def generate_new_secret(webcash_wallet=None, chain_code="RECEIVE", walletdepth=N
     """
     Derive a new secret using the deterministic wallet's master secret.
     """
+    assert chain_code == chain_code.upper()
     if webcash_wallet:
         walletdepth_param = walletdepth
         if walletdepth == None:
@@ -71,15 +91,7 @@ def generate_new_secret(webcash_wallet=None, chain_code="RECEIVE", walletdepth=N
         else:
             walletdepth = walletdepth
 
-        master_secret = webcash_wallet["master_secret"]
-        master_secret_bytes = convert_secret_hex_to_bytes(master_secret)
-
-        tag = hashlib.sha256(b"webcashwalletv1").digest()
-        new_secret = hashlib.sha256(tag + tag)
-        new_secret.update(master_secret_bytes)
-        new_secret.update(struct.pack(">Q", CHAIN_CODES[chain_code.upper()])) # big-endian
-        new_secret.update(struct.pack(">Q", walletdepth))
-        new_secret = new_secret.hexdigest()
+        new_secret = get_deterministic_secret(webcash_wallet["master_secret"], chain_code, walletdepth)
 
         # Record the change in walletdepth, but don't record the new secret
         # because (1) it can be re-constructed even if it is lost, and (2) the
@@ -136,9 +148,10 @@ def save_webcash_wallet(webcash_wallet, filename=WALLET_NAME):
     os.replace(temporary_filename, filename)
     return True
 
-def create_webcash_wallet():
-    print("Generating a new wallet with a new master secret...")
-    master_secret = generate_new_master_secret()
+def create_webcash_wallet(master_secret=None):
+    if master_secret is None:
+        print("Generating a new wallet with a new master secret...")
+        master_secret = generate_new_master_secret()
 
     return {
         "version": "1.0",
@@ -198,7 +211,7 @@ def yes_or_no(question):
         if reply[:1] == 'n':
             return False
 
-def ask_user_for_legal_agreements(webcash_wallet):
+def ask_user_for_legal_agreements(webcash_wallet, filename):
     """
     Allow the user to agree to the agreements, disclosures, and
     acknowledgements.
@@ -221,12 +234,12 @@ def ask_user_for_legal_agreements(webcash_wallet):
 
         print("\n\n\nAll done! You've acknowledged all the disclosures. You may now use webcash.")
 
-        save_webcash_wallet(webcash_wallet)
+        save_webcash_wallet(webcash_wallet, filename)
 
 @cli.command("setup", short_help="Perform initial wallet setup.", hidden=True)
 def setup():
     webcash_wallet = load_webcash_wallet()
-    ask_user_for_legal_agreements(webcash_wallet)
+    ask_user_for_legal_agreements(webcash_wallet, WALLET_NAME)
 
 def webcash_server_request_raw(url, json_data=None):
     method = "post" if json_data is not None else "get"
@@ -255,9 +268,9 @@ def check_wallet():
         outputs[str(sk.to_public().hashed_value)] = webcash
 
     while outputs:
-        # Batch into no more than 25 at a time
+        # Batch into no more than BATCH_SIZE at a time
         batch = {}
-        while outputs and len(batch) < 25:
+        while outputs and len(batch) < BATCH_SIZE:
             item = outputs.popitem()
             batch[item[0]] = item[1]
 
@@ -296,6 +309,85 @@ def check_wallet():
 @lock_wallet
 def check():
     return check_wallet()
+
+
+@cli.command(
+    "recreate-wallet-file", short_help="[advanced] Recreate wallet file from master secret. The recreated wallet will be saved to a new wallet file."
+)
+@click.argument("master_secret")
+def recreate_wallet_file_from_master_secret(master_secret):
+    if not is_master_secret(master_secret):
+        raise click.ClickException(
+            "Invalid master secret. Hex string of length 64 expected."
+        )
+
+    recreated_wallet_file = f"wallet_recreated_from_{master_secret}.webcash"
+    print(f"Recreated wallet will be saved to file \"{recreated_wallet_file}\".")
+    recreated_wallet = create_webcash_wallet(master_secret)
+    ask_user_for_legal_agreements(recreated_wallet, recreated_wallet_file)
+
+    unspent_amount = decimal.Decimal(0)
+    scanned_tokens = 0
+    server_calls = 0
+    unspent_webcash_tokens = []
+    for chain_code in CHAIN_CODES.keys():
+        print(f"Scanning chain {chain_code}...")
+        wallet_depth = 0
+        unknown_count = 0
+        stop_after_n_tested_unknown_tokens = 5 * BATCH_SIZE
+        while unknown_count < stop_after_n_tested_unknown_tokens:
+            hash_to_webcash_and_depth = {}
+
+            while len(hash_to_webcash_and_depth) < BATCH_SIZE:
+                hex_secret = get_deterministic_secret(
+                    master_secret, chain_code, wallet_depth
+                )
+                secret_webcash = SecretWebcash.deserialize(f"e1:secret:{hex_secret}")
+                public_webhash = secret_webcash.to_public()
+                hash_to_webcash_and_depth[
+                    public_webhash.hashed_value
+                ] = (secret_webcash, wallet_depth)
+                wallet_depth += 1
+
+            health_check_request = [
+                str(o[0].to_public()) for o in hash_to_webcash_and_depth.values()
+            ]
+            response = webcash_server_request(
+                WEBCASH_ENDPOINT_HEALTH_CHECK, health_check_request
+            )
+            server_calls += 1
+
+            assert len(hash_to_webcash_and_depth) == BATCH_SIZE
+            assert len(response["results"]) == BATCH_SIZE
+
+            for public_webcash, result in response["results"].items():
+                secret_webcash, found_at_wallet_depth = hash_to_webcash_and_depth[PublicWebcash.deserialize(public_webcash).hashed_value]
+                spent = result["spent"]
+                amount = result.get("amount")
+                token_is_unknown = spent is None and amount is None
+                scanned_tokens += 1
+                if token_is_unknown:
+                    unknown_count += 1
+                    continue
+                unknown_count = 0
+                current_wallet_depth = recreated_wallet["walletdepths"][chain_code]
+                if found_at_wallet_depth >= current_wallet_depth:
+                    recreated_wallet["walletdepths"][chain_code] = found_at_wallet_depth + 1
+                if spent:
+                    continue
+                assert amount is not None
+                unspent_amount += decimal.Decimal(amount)
+                unspent_webcash_token = (
+                    f"e{amount}:secret:{secret_webcash.secret_value}"
+                )
+                unspent_webcash_tokens.append(unspent_webcash_token)
+                recreated_wallet["webcash"].append(unspent_webcash_token)
+            save_webcash_wallet(recreated_wallet, recreated_wallet_file)
+
+    print(
+        f"Found {unspent_amount.normalize():f} webcash in {len(unspent_webcash_tokens)} tokens after scanning {scanned_tokens} tokens using {server_calls} server calls."
+    )
+    save_webcash_wallet(recreated_wallet, recreated_wallet_file)
 
 @cli.command("recover", short_help="Recover webcash using the wallet's master secret.")
 @click.option("--gaplimit", default=20)
@@ -727,7 +819,7 @@ def main():
     if not os.path.exists(WALLET_NAME):
         print(f"Didn't find an existing webcash wallet, making a new one called {WALLET_NAME}")
         webcash_wallet = create_webcash_wallet()
-        ask_user_for_legal_agreements(webcash_wallet)
+        ask_user_for_legal_agreements(webcash_wallet, WALLET_NAME)
         save_webcash_wallet(webcash_wallet)
 
     return cli()
