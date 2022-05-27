@@ -2,31 +2,29 @@
 Prototype of a miner.
 """
 
+import base64
+import datetime
+import hashlib
+import json
 import os
 import sys
-import hashlib
-import datetime
-import json
-import base64
 from decimal import Decimal
 
+from webcash.utils import lock_wallet
+from webcash.walletclient import (
+    create_webcash_wallet,
+    generate_new_secret,
+    load_webcash_wallet,
+    save_webcash_wallet,
+    webcash_server_request_raw,
+)
 from webcash.webcashbase import (
-    SecretWebcash,
-    compute_target,
     WEBCASH_ENDPOINT_MINING_REPORT,
     WEBCASH_ENDPOINT_REPLACE,
     WEBCASH_ENDPOINT_TARGET,
+    SecretWebcash,
+    compute_target,
 )
-
-from webcash.walletclient import (
-    load_webcash_wallet,
-    save_webcash_wallet,
-    create_webcash_wallet,
-    generate_new_secret,
-    webcash_server_request_raw,
-)
-
-from webcash.utils import lock_wallet
 
 INTERVAL_LENGTH_IN_SECONDS = 10
 

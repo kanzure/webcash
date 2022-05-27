@@ -16,32 +16,32 @@ python3 walletclient.py pay 5.15 <memo(optional)>
 That's it!
 """
 
-import json
-import decimal
-import secrets
-import hashlib
 import datetime
+import decimal
+import hashlib
+import json
+import os
+import secrets
 import string
 import struct
-import os
 import sys
 
-import requests
 import click
+import requests
+
+from .utils import lock_wallet
 
 # from miner import mine
 from .webcashbase import (
-    SecretWebcash,
-    PublicWebcash,
     LEGALESE,
+    WEBCASH_ENDPOINT_HEALTH_CHECK,
+    WEBCASH_ENDPOINT_REPLACE,
+    PublicWebcash,
+    SecretWebcash,
     amount_to_str,
     check_legal_agreements,
     deserialize_amount,
-    WEBCASH_ENDPOINT_HEALTH_CHECK,
-    WEBCASH_ENDPOINT_REPLACE,
 )
-
-from .utils import lock_wallet
 
 # unused?
 FEE_AMOUNT = 0

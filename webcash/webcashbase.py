@@ -1,11 +1,8 @@
 import decimal
-import secrets
 import hashlib
+import secrets
 
-from .exceptions import (
-    AmountException,
-    DeserializationException,
-)
+from .exceptions import AmountException, DeserializationException
 
 WEBCASH_WEBSERVER_SCHEME = "https"
 WEBCASH_WEBSERVER_HOSTNAME = "webcash.org"

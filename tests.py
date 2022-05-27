@@ -1,17 +1,11 @@
-import unittest
-import secrets
-import random
 import hashlib
+import random
+import secrets
+import unittest
 from decimal import Decimal
 
-from webcash.webcashbase import (
-    PublicWebcash,
-    SecretWebcash,
-    secret_to_public,
-    LEGALESE,
-)
-
 from webcash.exceptions import AmountException
+from webcash.webcashbase import LEGALESE, PublicWebcash, SecretWebcash, secret_to_public
 
 _ACKED_DISCLOSURES = {disclosure_name: True for disclosure_name in LEGALESE.keys()}
 
