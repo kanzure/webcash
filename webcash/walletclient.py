@@ -250,7 +250,7 @@ def webcash_server_request(url, json_data):
         raise Exception(f"Something went wrong on the server: {response.content}")
     json_response = response.json()
     if json_response.get("status", "") != "success":
-        raise Exception(f"Something went wrong on the server: {response}")
+        raise Exception(f"Something went wrong on the server: {response.content}")
     return json_response
 
 def check_wallet():
