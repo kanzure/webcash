@@ -27,11 +27,13 @@ LEGALESE = {
     "terms": "I acknowledge and agree to the Terms of Service located at https://webcash.org/terms",
 }
 
+
 def compute_target(difficulty_target_bits):
     """
     Calculate a target hash given a difficulty.
     """
     return 2 ** (256 - difficulty_target_bits)
+
 
 def verify_hash(work, value):
     """
@@ -43,6 +45,7 @@ def verify_hash(work, value):
     else:
         return True
 
+
 def check_work_meets_target(work, difficulty_target_bits):
     """
     Check that the PoW hashwork meets a certain difficulty.
@@ -53,11 +56,13 @@ def check_work_meets_target(work, difficulty_target_bits):
     else:
         return False
 
+
 def generate_secret_value(size=32):
     """
     generate a random secret
     """
     return secrets.token_hex(size)
+
 
 def secret_to_public(secret_value: str):
     """
@@ -65,15 +70,17 @@ def secret_to_public(secret_value: str):
     """
     return hashlib.sha256(bytes(str(secret_value), "ascii")).hexdigest()
 
+
 def validate_amount_decimals(amount: decimal.Decimal):
     """
     Take an amount and raise an error if it has too many decimals.
     """
-    valid = (((amount * 10**8) % 1) == 0)
+    valid = ((amount * 10**8) % 1) == 0
     if not valid:
         raise AmountException("Amount precision should be at most 8 decimals.")
     else:
         return True
+
 
 def amount_to_str(amount):
     """
@@ -86,7 +93,8 @@ def amount_to_str(amount):
         return "?"
     else:
         validate_amount_decimals(amount)
-        return f'{amount.normalize():f}' # trim any trailing zeros
+        return f"{amount.normalize():f}"  # trim any trailing zeros
+
 
 def deserialize_amount(amount: str):
     """
@@ -102,6 +110,7 @@ def deserialize_amount(amount: str):
         amount = None
     return amount
 
+
 def deserialize_webcash(value: str):
     """
     Take any kind of webcash and instantiate an object with the values specified
@@ -109,7 +118,9 @@ def deserialize_webcash(value: str):
     """
     if ":" in value:
         if value.count(":") < 2:
-            raise DeserializationException("Don't know how to deserialize this webcash.")
+            raise DeserializationException(
+                "Don't know how to deserialize this webcash."
+            )
 
         parts = value.split(":")
         amount_part = parts[0]
@@ -119,7 +130,9 @@ def deserialize_webcash(value: str):
 
         public_or_secret = parts[1]
         if public_or_secret not in ["public", "secret"]:
-            raise DeserializationException("Can't deserialize this webcash because it needs to be either public/secret.")
+            raise DeserializationException(
+                "Can't deserialize this webcash because it needs to be either public/secret."
+            )
 
         data = parts[2]
         if len(parts) > 3:
@@ -134,8 +147,9 @@ def deserialize_webcash(value: str):
             raise DeserializationException("Not sure how to deserialize this webcash.")
     else:
         raise DeserializationException("Given webcash needs to be better structured.")
-        #hashed_value = value
-        #return cls(None, hashed_value)
+        # hashed_value = value
+        # return cls(None, hashed_value)
+
 
 def check_legal_agreements(webcash_wallet):
     """
@@ -144,9 +158,12 @@ def check_legal_agreements(webcash_wallet):
     """
     acknowledgements = webcash_wallet["legalese"].items()
     expected = LEGALESE.keys()
-    has_expected = all([expectation in webcash_wallet["legalese"].keys() for expectation in expected])
+    has_expected = all(
+        [expectation in webcash_wallet["legalese"].keys() for expectation in expected]
+    )
     agreement = all(ack[1] == True for ack in acknowledgements)
     return has_expected and agreement
+
 
 class SecretWebcash:
     """
@@ -173,7 +190,7 @@ class SecretWebcash:
 
     def __repr__(self):
         amount = amount_to_str(self.amount)
-        return f"SecretWebcash(amount=\"{amount}\", secret_value=\"{self.secret_value}\")"
+        return f'SecretWebcash(amount="{amount}", secret_value="{self.secret_value}")'
 
     def __str__(self):
         amount = amount_to_str(self.amount)
@@ -199,7 +216,7 @@ class SecretWebcash:
             else:
                 return False
         else:
-            #return super().__eq__(other)
+            # return super().__eq__(other)
             return NotImplemented
 
     def to_public(self):
@@ -208,6 +225,7 @@ class SecretWebcash:
         """
         hashed_value = secret_to_public(self.secret_value)
         return PublicWebcash(amount=self.amount, hashed_value=hashed_value)
+
 
 class PublicWebcash:
     """
@@ -228,7 +246,7 @@ class PublicWebcash:
 
     def __repr__(self):
         amount = amount_to_str(self.amount)
-        return f"PublicWebcash(amount=\"{amount}\", hashed_value=\"{self.hashed_value}\")"
+        return f'PublicWebcash(amount="{amount}", hashed_value="{self.hashed_value}")'
 
     def __str__(self):
         amount = amount_to_str(self.amount)
@@ -257,5 +275,5 @@ class PublicWebcash:
             else:
                 return False
         else:
-            #return super().__eq__(other)
+            # return super().__eq__(other)
             return NotImplemented
