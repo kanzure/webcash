@@ -46,6 +46,8 @@ from .utils import lock_wallet
 # unused?
 FEE_AMOUNT = 0
 
+BATCH_SIZE = 25
+
 WALLET_NAME = "default_wallet.webcash"
 
 CHAIN_CODES = {
@@ -264,9 +266,9 @@ def check_wallet():
         outputs[str(sk.to_public().hashed_value)] = webcash
 
     while outputs:
-        # Batch into no more than 25 at a time
+        # Batch into no more than BATCH_SIZE at a time
         batch = {}
-        while outputs and len(batch) < 25:
+        while outputs and len(batch) < BATCH_SIZE:
             item = outputs.popitem()
             batch[item[0]] = item[1]
 
