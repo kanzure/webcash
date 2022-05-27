@@ -86,7 +86,7 @@ def amount_to_str(amount):
     """
     if amount == 0:
         raise AmountException("Amount can't be 0.")
-    elif amount == None:
+    elif amount is None:
         return "?"
     else:
         validate_amount_decimals(amount)
@@ -97,7 +97,7 @@ def deserialize_amount(amount: str):
     """
     Take an amount in string format and convert it into a decimal object.
     """
-    if amount != None and amount != "?":
+    if amount is not None and amount != "?":
         amount = decimal.Decimal(amount)
         if amount == 0:
             raise AmountException("Amount can't be 0.")
@@ -158,7 +158,7 @@ def check_legal_agreements(webcash_wallet):
     has_expected = all(
         [expectation in webcash_wallet["legalese"].keys() for expectation in expected]
     )
-    agreement = all(ack[1] == True for ack in acknowledgements)
+    agreement = all(ack[1] is True for ack in acknowledgements)
     return has_expected and agreement
 
 
@@ -255,7 +255,7 @@ class PublicWebcash:
     @classmethod
     def deserialize(cls, value: str, convert_secret_to_public=False):
         webcash = deserialize_webcash(value)
-        if convert_secret_to_public == True and isinstance(webcash, SecretWebcash):
+        if convert_secret_to_public is True and isinstance(webcash, SecretWebcash):
             return webcash.to_public()
         else:
             return webcash

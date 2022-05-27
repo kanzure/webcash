@@ -53,7 +53,7 @@ def mine():
     else:
         webcash_wallet = load_webcash_wallet()
 
-    if webcash_wallet["legalese"]["terms"] != True:
+    if webcash_wallet["legalese"]["terms"] is not True:
         print("Error: run walletclient.py setup first")
         sys.exit(1)
 
@@ -202,7 +202,7 @@ def mine():
                 # webcash = data["webcash"]
                 webcash_wallet["webcash"].extend([str(new_webcash)])
                 save_webcash_wallet(webcash_wallet)
-                print(f"Wallet saved!")
+                print("Wallet saved!")
                 # time.sleep(0.25)
 
             keep = generate_new_secret(

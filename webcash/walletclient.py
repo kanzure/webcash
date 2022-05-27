@@ -87,7 +87,7 @@ def generate_new_secret(webcash_wallet=None, chain_code="RECEIVE", walletdepth=N
     """
     if webcash_wallet:
         walletdepth_param = walletdepth
-        if walletdepth == None:
+        if walletdepth is None:
             walletdepth = webcash_wallet["walletdepths"][chain_code]
         else:
             walletdepth = walletdepth
@@ -100,7 +100,7 @@ def generate_new_secret(webcash_wallet=None, chain_code="RECEIVE", walletdepth=N
         # because (1) it can be re-constructed even if it is lost, and (2) the
         # assumption is that other code elsewhere will do something with the
         # new secret.
-        if walletdepth_param == None:
+        if walletdepth_param is None:
             # Only update the walletdepth if the walletdepth was not provided.
             # This allows for the recovery function to work correctly.
             webcash_wallet["walletdepths"][chain_code] = walletdepth + 1
@@ -240,14 +240,14 @@ def ask_user_for_legal_agreements(webcash_wallet):
         for (disclosure_name, disclosure) in LEGALESE.items():
             print(f'Disclosure "{disclosure_name}": {disclosure}')
             print("\n\n")
-            answer = yes_or_no(f"Do you agree?")
+            answer = yes_or_no("Do you agree?")
 
-            if answer == False:
+            if answer is False:
                 print(
-                    f"Unfortunately, you must acknowledge and agree to all agreements to use webcash."
+                    "Unfortunately, you must acknowledge and agree to all agreements to use webcash."
                 )
                 sys.exit(0)
-            elif answer == True:
+            elif answer is True:
                 webcash_wallet["legalese"][disclosure_name] = True
                 continue
 
@@ -323,7 +323,7 @@ def check_wallet():
 
                 webcash_wallet["unconfirmed"].append(batch[webcash_hashed_value])
                 webcash_wallet["webcash"].remove(batch[webcash_hashed_value])
-            elif result["spent"] == False:
+            elif result["spent"] is False:
                 # check the amount...
                 webcash_hashed_value = PublicWebcash.deserialize(webcash).hashed_value
                 wallet_cash = SecretWebcash.deserialize(batch[webcash_hashed_value])
@@ -410,12 +410,12 @@ def recover(gaplimit):
             for (public_webcash, result) in response["results"].items():
                 public_webcash = PublicWebcash.deserialize(public_webcash).hashed_value
 
-                if result["spent"] != None:
+                if result["spent"] is not None:
                     has_had_webcash = True
                     # last_used_walletdepth = current_walletdepth + idx
                     last_used_walletdepth = check_webcashes[public_webcash].walletdepth
 
-                if result["spent"] == False:
+                if result["spent"] is False:
                     wc = check_webcashes[public_webcash]
                     wc.amount = decimal.Decimal(result["amount"])
                     if (

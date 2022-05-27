@@ -3,8 +3,6 @@ class WebcashException(Exception):
     Base class for webcash exceptions.
     """
 
-    pass
-
 
 class AmountException(WebcashException):
     """
@@ -12,12 +10,8 @@ class AmountException(WebcashException):
     amount.
     """
 
-    pass
-
 
 class DeserializationException(WebcashException):
     """
     Error for deserialization issues.
     """
-
-    pass
