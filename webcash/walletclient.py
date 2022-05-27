@@ -21,6 +21,7 @@ import decimal
 import secrets
 import hashlib
 import datetime
+import string
 import struct
 import os
 import sys
@@ -54,6 +55,22 @@ CHAIN_CODES = {
     "MINING": 3,
 }
 
+
+def is_master_secret(s):
+    return len(s) != 0 and all(c in string.hexdigits for c in s)
+
+
+def get_deterministic_secret(master_secret_hex, chain_code, wallet_depth):
+    assert is_master_secret(master_secret_hex)
+    assert chain_code == chain_code.upper()
+    assert wallet_depth >= 0
+    tag = hashlib.sha256(b"webcashwalletv1").digest()
+    secret = hashlib.sha256(tag + tag)
+    secret.update(convert_secret_hex_to_bytes(master_secret_hex))
+    secret.update(struct.pack(">Q", CHAIN_CODES[chain_code])) # big-endian
+    secret.update(struct.pack(">Q", wallet_depth))
+    return secret.hexdigest()
+
 def convert_secret_hex_to_bytes(secret):
     """
     Convert a string secret to bytes.
@@ -71,15 +88,7 @@ def generate_new_secret(webcash_wallet=None, chain_code="RECEIVE", walletdepth=N
         else:
             walletdepth = walletdepth
 
-        master_secret = webcash_wallet["master_secret"]
-        master_secret_bytes = convert_secret_hex_to_bytes(master_secret)
-
-        tag = hashlib.sha256(b"webcashwalletv1").digest()
-        new_secret = hashlib.sha256(tag + tag)
-        new_secret.update(master_secret_bytes)
-        new_secret.update(struct.pack(">Q", CHAIN_CODES[chain_code.upper()])) # big-endian
-        new_secret.update(struct.pack(">Q", walletdepth))
-        new_secret = new_secret.hexdigest()
+        new_secret = get_deterministic_secret(webcash_wallet["master_secret"], chain_code, walletdepth)
 
         # Record the change in walletdepth, but don't record the new secret
         # because (1) it can be re-constructed even if it is lost, and (2) the
