@@ -365,7 +365,6 @@ def recover(gaplimit=20, payments=False):
                 if result["spent"] == False:
                     wc = check_webcashes[public_webcash]
                     wc.amount = decimal.Decimal(result["amount"])
-                    if chain_code.upper() != "PAY" and str(wc) not in webcash_wallet["webcash"]:
                     if str(wc) not in webcash_wallet["webcash"]:
                         if chain_code.upper() == "PAY" and not sweep_payments:
                             print(f"Found known webcash of amount: {amount_to_str(wc.amount)} (might be a payment)")
