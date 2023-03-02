@@ -299,12 +299,18 @@ def check():
 
 @cli.command("recover", short_help="Recover webcash using the wallet's master secret.")
 @click.option("--gaplimit", default=20)
+@click.option("--payments", default=False)
 @lock_wallet
-def recover(gaplimit):
+def recover(gaplimit=20, payments=False):
     """
     Recover webcash from a webcash wallet using its master secret as a
     deterministic seed. Also check all webcash in the wallet.
     """
+
+    # Recovered payments are ignored by default because they are intended to be
+    # payments.
+    sweep_payments = False
+
     # gaplimit is the maximum window span that will be used, on the assumption
     # that any valid webcash will be found within the last item plus gaplimit
     # number more of the secrets.
@@ -360,10 +366,12 @@ def recover(gaplimit):
                     wc = check_webcashes[public_webcash]
                     wc.amount = decimal.Decimal(result["amount"])
                     if chain_code.upper() != "PAY" and str(wc) not in webcash_wallet["webcash"]:
-                        print(f"Recovered webcash: {amount_to_str(wc.amount)}")
-                        webcash_wallet["webcash"].append(str(check_webcashes[public_webcash]))
-                    else:
-                        print(f"Found known webcash of amount: {amount_to_str(wc.amount)} (might be a payment)")
+                    if str(wc) not in webcash_wallet["webcash"]:
+                        if chain_code.upper() == "PAY" and not sweep_payments:
+                            print(f"Found known webcash of amount: {amount_to_str(wc.amount)} (might be a payment)")
+                        else:
+                            print(f"Recovered webcash: {amount_to_str(wc.amount)}")
+                            webcash_wallet["webcash"].append(str(check_webcashes[public_webcash]))
 
                 #idx += 1
 
