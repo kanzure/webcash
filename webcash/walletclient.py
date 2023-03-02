@@ -309,7 +309,7 @@ def recover(gaplimit=20, payments=False):
 
     # Recovered payments are ignored by default because they are intended to be
     # payments.
-    sweep_payments = False
+    sweep_payments = payments
 
     # gaplimit is the maximum window span that will be used, on the assumption
     # that any valid webcash will be found within the last item plus gaplimit
