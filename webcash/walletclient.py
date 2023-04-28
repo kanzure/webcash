@@ -178,6 +178,18 @@ def get_info():
 
     print(f"outputs: {count}")
 
+def get_coins():
+    webcash_wallet = load_webcash_wallet()
+
+    coins_str=""
+    for index, webcash in enumerate(webcash_wallet["webcash"]):
+        coins_str+="["+str(index)+"] " + webcash+"\n"
+    print("Wallet contains the following webcash:")
+    print(coins_str)
+
+
+
+
 @click.group(context_settings=dict(help_option_names=["-h", "--help"]))
 def cli():
     pass
@@ -189,6 +201,10 @@ def info():
 @cli.command("status", short_help="Print wallet information. This is an alias for 'info'.", hidden=True)
 def status():
     return get_info()
+
+@cli.command("coins", short_help="Lists available webcash for spending and index #.")
+def coins():
+    return get_coins()
 
 def yes_or_no(question):
     while "the user failed to choose y or n":
@@ -520,6 +536,11 @@ def insertmany(webcash):
 @click.argument('memo', nargs=-1)
 @lock_wallet
 def pay(amount, memo=""):
+    payHandler(amount, 0, False, memo)
+
+
+def payHandler(amount, index, control:bool, memo=""):
+
     try:
         amount = deserialize_amount(str(amount))
     except decimal.InvalidOperation:
@@ -533,28 +554,41 @@ def pay(amount, memo=""):
         print("User must acknowledge and agree to all agreements first.")
         return
 
-    # scan for an amount
-    use_this_webcash = []
-    for webcash in webcash_wallet["webcash"]:
-        webcash = SecretWebcash.deserialize(webcash)
+    if  control:
+        try:
+            webcash = SecretWebcash.deserialize(webcash_wallet["webcash"][int(index)])
+            use_this_webcash = []
 
-        if webcash.amount >= amount:
-            use_this_webcash.append(webcash)
-            break
+            if (webcash.amount >= amount):
+                use_this_webcash.append(webcash)
+            else:
+                print("Not enough webcash from specified secret")
+                sys.exit(0)
+        except IndexError:
+            raise click.ClickException("Invalid index")
     else:
-        running_amount = decimal.Decimal(0)
-        running_webcash = []
+        # scan for an amount
+        use_this_webcash = []
         for webcash in webcash_wallet["webcash"]:
             webcash = SecretWebcash.deserialize(webcash)
-            running_webcash.append(webcash)
-            running_amount += webcash.amount
 
-            if running_amount >= amount:
-                use_this_webcash = running_webcash
+            if webcash.amount >= amount:
+                use_this_webcash.append(webcash)
                 break
         else:
-            print("Couldn't find enough webcash in the wallet.")
-            sys.exit(0)
+            running_amount = decimal.Decimal(0)
+            running_webcash = []
+            for webcash in webcash_wallet["webcash"]:
+                webcash = SecretWebcash.deserialize(webcash)
+                running_webcash.append(webcash)
+                running_amount += webcash.amount
+
+                if running_amount >= amount:
+                    use_this_webcash = running_webcash
+                    break
+            else:
+                print("Couldn't find enough webcash in the wallet.")
+                sys.exit(0)
 
     found_amount = sum([ec.amount for ec in use_this_webcash])
     print(f"found_amount: {amount_to_str(found_amount)}")
@@ -649,6 +683,15 @@ def pay(amount, memo=""):
     print(f"Make this payment using the following webcash: {str(use_this_webcash[0])}")
 
     save_webcash_wallet(webcash_wallet)
+
+@cli.command("payX", short_help="Pay <amount> webcash from a specific wallet <index>. Use 'coins' to see the indices")
+@click.argument('amount')
+@click.argument('index')
+@click.argument('memo', nargs=-1)
+@lock_wallet
+def payX(amount, index, memo=""):
+    payHandler(amount, index, True, memo)
+
 
 @cli.command("merge", short_help="Merge smaller wallet outputs into fewer larger wallet outputs.")
 @click.option("--group", default="20", help="Maximum number of outputs to merge at once")
