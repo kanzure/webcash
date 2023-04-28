@@ -387,7 +387,7 @@ def recover(gaplimit=20, payments=False):
         if reported_walletdepth > last_used_walletdepth + 1:
             print(f"Something may have gone wrong: reported walletdepth was {reported_walletdepth} but only found up to {last_used_walletdepth} depth")
 
-        if reported_walletdepth < last_used_walletdepth:
+        if reported_walletdepth <= last_used_walletdepth:
             webcash_wallet["walletdepths"][chain_code] = last_used_walletdepth + 1
 
     # TODO: only save the wallet when it has been modified?
